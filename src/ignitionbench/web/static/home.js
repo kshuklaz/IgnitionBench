@@ -48,12 +48,23 @@ async function loadProjects() {
         loadProjects();
       }
     });
-    card.querySelector(".delete").addEventListener("click", async (e) => {
+    // two-step inline confirm: first click arms, second click deletes
+    const deleteBtn = card.querySelector(".delete");
+    deleteBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (confirm(`Delete "${p.name}"? This cannot be undone.`)) {
+      if (deleteBtn.dataset.armed) {
         await fetch(`/api/projects/${p.id}`, { method: "DELETE" });
         loadProjects();
+        return;
       }
+      deleteBtn.dataset.armed = "1";
+      deleteBtn.textContent = "✕ click again to delete";
+      deleteBtn.style.color = "var(--critical)";
+      setTimeout(() => {
+        delete deleteBtn.dataset.armed;
+        deleteBtn.textContent = "✕ delete";
+        deleteBtn.style.color = "";
+      }, 3000);
     });
     grid.appendChild(card);
   }

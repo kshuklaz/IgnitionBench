@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 100">
-  <path fill="#FF5A00" d="M 14 22
-    C 150 14, 400 28, 632 55
-    C 420 68, 170 92, 30 84
-    C 6 80, 4 30, 14 22 Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="66" viewBox="0 0 640 66">
+  <path fill="#FF5A00" d="M 5 5
+    C 160 2, 420 12, 635 33
+    C 420 48, 200 64, 8 58
+    C 1 54, 0 12, 5 5 Z"/>
 </svg>
