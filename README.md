@@ -32,10 +32,19 @@ pip install -e ".[dev,web]"
 python -m ignitionbench.web
 ```
 
-Then open http://localhost:8000 — a dark, live-updating motor designer:
-pick a propellant, set BATES grain and nozzle dimensions, and watch Kn,
-chamber pressure, thrust, impulse class, the motor cross-section, and
-safety warnings update as you type.
+Then open http://localhost:8000 — a dark design studio:
+
+- **Home** — create and file multiple motor projects (stored as JSON under
+  `~/.ignitionbench/projects/`), each carded with its impulse class.
+- **Step 1 · Propellant** — pick a library formulation or enter a custom
+  batch (a, n, density, γ, flame temp, molar mass) with a live burn-rate chart.
+- **Step 2 · Motor design** — BATES grain + nozzle inputs, live Kn/pressure/
+  thrust/class tiles, NAR/TRA certification requirement, safety warnings,
+  an interactive Three.js 3D model with cutaway view, and STL export of the
+  grain segment for CAD or 3D printing.
+- **Step 3 · Simulation** — burn-regression simulator with an animated grain
+  (face + side views, play/scrub), thrust and chamber-pressure curves with a
+  synced time cursor, and delivered performance numbers.
 
 ## Quickstart
 

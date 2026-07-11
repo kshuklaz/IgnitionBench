@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IgnitionBench — Projects</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="flame">▲</span>
+    <div>
+      <h1>IgnitionBench</h1>
+      <p>Solid rocket motor design studio</p>
+    </div>
+  </div>
+  <button class="btn primary" id="newProjectBtn">+ New project</button>
+</header>
+
+<main class="home">
+  <div class="empty-state" id="emptyState" hidden>
+    <div class="empty-flame">▲</div>
+    <h2>No projects yet</h2>
+    <p>Start your first motor — pick a propellant, shape the grain, and watch it burn.</p>
+    <button class="btn primary" id="emptyNewBtn">Start your first motor</button>
+  </div>
+  <div class="project-grid" id="projectGrid"></div>
+</main>
+
+<div class="modal-overlay" id="modal" hidden>
+  <div class="modal">
+    <h2>New project</h2>
+    <label for="projectName">Project name</label>
+    <input id="projectName" type="text" placeholder="e.g. 54 mm KNSB J-motor" maxlength="60" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn" id="modalCancel">Cancel</button>
+      <button class="btn primary" id="modalCreate">Create</button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='home.js') }}"></script>
+</body>
+</html>

@@ -22,3 +22,26 @@ def motor_class(total_impulse: float) -> str:
             return name
         upper *= 2
     return ">O"
+
+
+_CERT_LEVELS = (
+    ({"1/4A", "1/2A", "A", "B", "C", "D"}, "none", "No certification required (model rocket)"),
+    ({"E", "F", "G"}, "none", "No certification required (mid-power — check field rules)"),
+    ({"H", "I"}, "L1", "NAR/TRA Level 1 certification required"),
+    ({"J", "K", "L"}, "L2", "NAR/TRA Level 2 certification required"),
+    ({"M", "N", "O"}, "L3", "NAR/TRA Level 3 certification required"),
+)
+
+
+def certification(letter: str) -> dict[str, str]:
+    """Certification requirement for a motor class letter.
+
+    Returns {"level": "none"|"L1"|"L2"|"L3"|"beyond", "text": ...}.
+    """
+    for letters, level, text in _CERT_LEVELS:
+        if letter in letters:
+            return {"level": level, "text": text}
+    return {
+        "level": "beyond",
+        "text": "Beyond O class — outside NAR/TRA hobby certification entirely",
+    }

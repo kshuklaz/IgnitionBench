@@ -1,0 +1,425 @@
+import { lineChart } from "./charts.js";
+import { MotorViewer } from "./viewer3d.js";
+
+const $ = (id) => document.getElementById(id);
+const fmt = (x, d = 1) =>
+  Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const debounce = (fn, ms) => {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+};
+
+const GRAIN_IDS = ["segments", "outer_d_mm", "core_d_mm", "length_mm"];
+const NOZZLE_IDS = ["throat_d_mm", "half_angle_deg"];
+const CUSTOM_IDS = ["name", "a_mm_mpa", "n", "density", "gamma", "temp_k", "molar_g", "min_mpa", "max_mpa"];
+
+let project = null;
+let library = {};
+let viewer = null;
+let lastDesign = null;
+let sim = null;
+let simStale = true;
+let charts = { thrust: null, pressure: null };
+
+// ---------- state <-> DOM ----------
+
+function stateToForms() {
+  const p = project.propellant;
+  document.querySelectorAll("#propMode .seg").forEach((b) =>
+    b.classList.toggle("active", b.dataset.mode === p.mode));
+  $("libraryForm").hidden = p.mode !== "library";
+  $("customForm").hidden = p.mode !== "custom";
+  $("propellant").value = p.key;
+  for (const f of CUSTOM_IDS) $(`c_${f}`).value = p.custom[f];
+  for (const f of GRAIN_IDS) $(f).value = project.grain[f];
+  for (const f of NOZZLE_IDS) $(f).value = project.nozzle[f];
+  $("projectName").textContent = project.name;
+}
+
+function formsToState() {
+  const mode = document.querySelector("#propMode .seg.active").dataset.mode;
+  project.propellant.mode = mode;
+  project.propellant.key = $("propellant").value || project.propellant.key;
+  for (const f of CUSTOM_IDS) {
+    const v = $(`c_${f}`).value;
+    project.propellant.custom[f] = f === "name" ? v : parseFloat(v);
+  }
+  for (const f of GRAIN_IDS) project.grain[f] = parseFloat($(f).value);
+  for (const f of NOZZLE_IDS) project.nozzle[f] = parseFloat($(f).value);
+}
+
+const save = debounce(async () => {
+  $("saveState").textContent = "Saving…";
+  $("saveState").classList.add("saving");
+  await fetch(`/api/projects/${window.PROJECT_ID}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: project.name,
+      propellant: project.propellant,
+      grain: project.grain,
+      nozzle: project.nozzle,
+      summary: project.summary,
+    }),
+  });
+  $("saveState").textContent = "Saved";
+  $("saveState").classList.remove("saving");
+}, 400);
+
+// ---------- propellant tab ----------
+
+function designPayload() {
+  return { propellant: project.propellant, grain: project.grain, nozzle: project.nozzle };
+}
+
+function burnRateSamples() {
+  // returns {p: MPa[], r: mm/s[]} for the active propellant
+  const ps = [], rs = [];
+  const sample = (pMin, pMax, a, n) => {
+    for (let i = 0; i <= 30; i++) {
+      const p = pMin + (i / 30) * (pMax - pMin);
+      ps.push(p / 1e6);
+      rs.push(a * Math.pow(p, n) * 1000);
+    }
+  };
+  if (project.propellant.mode === "library") {
+    const lib = library[project.propellant.key];
+    if (!lib) return null;
+    for (const s of lib.segments) sample(s.min, s.max, s.a, s.n);
+  } else {
+    const c = project.propellant.custom;
+    if (!(c.a_mm_mpa > 0) || !(c.n > 0) || !(c.min_mpa < c.max_mpa)) return null;
+    const aSI = (c.a_mm_mpa * 1e-3) / Math.pow(1e6, c.n);
+    sample(c.min_mpa * 1e6, c.max_mpa * 1e6, aSI, c.n);
+  }
+  return { p: ps, r: rs };
+}
+
+function renderPropellantTab() {
+  const meta = $("libMeta");
+  if (project.propellant.mode === "library") {
+    const lib = library[project.propellant.key];
+    if (lib) {
+      meta.innerHTML = `
+        <tr><td>Density</td><td>${fmt(lib.density, 0)} kg/m³</td></tr>
+        <tr><td>c* characteristic velocity</td><td>${fmt(lib.c_star, 0)} m/s</td></tr>
+        <tr><td>γ exhaust</td><td>${fmt(lib.gamma, 3)}</td></tr>
+        <tr><td>Flame temperature</td><td>${fmt(lib.temp_k, 0)} K</td></tr>
+        <tr><td>Validated range</td><td>${fmt(lib.min_pressure / 1e6, 2)}–${fmt(lib.max_pressure / 1e6, 1)} MPa</td></tr>
+        <tr><td>Burn-rate segments</td><td>${lib.segments.length}</td></tr>`;
+    }
+  }
+  const samples = burnRateSamples();
+  if (samples) {
+    lineChart($("burnRateChart"), {
+      x: samples.p, y: samples.r,
+      xLabel: "chamber pressure (MPa)", yLabel: "mm/s",
+      yFmt: (v) => fmt(v, 1),
+    });
+    $("propSummary").textContent =
+      project.propellant.mode === "library"
+        ? "Piecewise Vieille's-law fit from published strand-burner measurements."
+        : "Single-segment Vieille's law from your a and n values.";
+  }
+}
+
+// ---------- motor tab ----------
+
+async function refreshDesign() {
+  formsToState();
+  save();
+  renderPropellantTab();
+  simStale = true;
+
+  const res = await fetch("/api/design", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(designPayload()),
+  });
+  const d = await res.json();
+  const banner = $("designError");
+
+  if (!res.ok) {
+    banner.textContent = "⚠ " + d.error;
+    banner.hidden = false;
+    $("classBadge").textContent = "—";
+    $("certChip").hidden = true;
+    lastDesign = null;
+    return;
+  }
+  banner.hidden = true;
+  lastDesign = d;
+
+  $("v_kn").textContent = fmt(d.kn, 0);
+  $("v_pc").textContent = fmt(d.chamber_pressure_mpa, 2) + " MPa";
+  $("s_pc").textContent = fmt(d.chamber_pressure_psi, 0) + " psi";
+  $("v_thrust").textContent = fmt(d.thrust_n, 0) + " N";
+  $("v_class").textContent = d.motor_class;
+  $("s_cert").textContent = d.certification.level === "none" ? "no cert needed" : d.certification.level + " cert";
+
+  $("n_eps").textContent = fmt(d.expansion_ratio, 2) + " : 1";
+  $("n_exit").textContent = fmt(d.exit_d_mm, 1) + " mm";
+  $("n_div").textContent = fmt(d.divergent_length_mm, 1) + " mm";
+  $("n_mass").textContent = fmt(d.propellant_mass_g, 0) + " g";
+  $("n_p2t").textContent = fmt(d.port_to_throat, 2);
+
+  $("classBadge").textContent = d.motor_class;
+  const chip = $("certChip");
+  chip.hidden = false;
+  chip.className = `cert-chip ${d.certification.level}`;
+  chip.textContent = d.certification.text;
+
+  const list = $("warnings");
+  list.innerHTML = "";
+  if (d.warnings.length === 0) {
+    list.innerHTML = `<li class="ok">✓ No warnings — design is inside validated data and geometry guidelines.</li>`;
+  } else {
+    for (const w of d.warnings) {
+      const li = document.createElement("li");
+      li.className = w.level;
+      li.textContent = (w.level === "serious" ? "▲ " : "△ ") + w.text;
+      list.appendChild(li);
+    }
+  }
+
+  project.summary = {
+    motor_class: d.motor_class,
+    total_impulse_ns: d.total_impulse_ns,
+    thrust_n: d.thrust_n,
+  };
+
+  viewer.rebuild(d.geometry);
+}
+
+// ---------- simulation tab ----------
+
+async function runSimulation() {
+  const res = await fetch("/api/simulate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(designPayload()),
+  });
+  const d = await res.json();
+  const banner = $("simError");
+  if (!res.ok) {
+    banner.textContent = "⚠ " + d.error;
+    banner.hidden = false;
+    sim = null;
+    return;
+  }
+  banner.hidden = true;
+  sim = d;
+  simStale = false;
+
+  $("m_maxF").textContent = fmt(d.max_thrust, 0) + " N";
+  $("s_avgF").textContent = "avg " + fmt(d.avg_thrust, 0) + " N";
+  $("m_maxP").textContent = fmt(d.max_pressure / 1e6, 2) + " MPa";
+  $("s_maxP").textContent = fmt(d.max_pressure / 6895, 0) + " psi";
+  $("m_tb").textContent = fmt(d.burn_time, 2) + " s";
+  $("m_It").textContent = fmt(d.total_impulse, 0) + " N·s";
+  $("s_class").textContent = `class ${d.motor_class} · ${d.certification.text}`;
+  $("m_isp").textContent = fmt(d.isp_delivered, 0) + " s";
+  $("m_kn").textContent = fmt(d.peak_kn, 0);
+
+  charts.thrust = lineChart($("thrustChart"), {
+    x: d.time, y: d.thrust, xLabel: "time (s)", yLabel: "N", yFmt: (v) => fmt(v, 0),
+  });
+  charts.pressure = lineChart($("pressureChart"), {
+    x: d.time, y: d.pressure.map((p) => p / 1e6), xLabel: "time (s)", yLabel: "MPa", yFmt: (v) => fmt(v, 2),
+  });
+
+  $("scrubber").max = d.time.length - 1;
+  setFrame(0);
+}
+
+// ----- grain animation -----
+
+let playing = false;
+let playhead = 0;
+let lastTick = 0;
+let playTimer = null;
+
+function frameIndex(t) {
+  const times = sim.time;
+  let lo = 0, hi = times.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (times[mid] <= t) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
+function setFrame(i) {
+  if (!sim) return;
+  const g = project.grain;
+  const webMm = sim.web[i] * 1000;
+  $("scrubber").value = i;
+  $("animTime").textContent = `t = ${fmt(sim.time[i], 2)} s`;
+  drawFace(g, webMm);
+  drawSide(g, webMm);
+  $("animReadout").innerHTML =
+    `Kn <b>${fmt(sim.kn[i], 0)}</b> · ` +
+    `Pc <b>${fmt(sim.pressure[i] / 1e6, 2)} MPa</b> · ` +
+    `thrust <b>${fmt(sim.thrust[i], 0)} N</b> · ` +
+    `propellant <b>${fmt(sim.mass[i] * 1000, 0)} g</b> · ` +
+    `web burned <b>${fmt(webMm, 1)} mm</b>`;
+  charts.thrust?.setCursor(sim.time[i]);
+  charts.pressure?.setCursor(sim.time[i]);
+}
+
+function drawFace(g, webMm) {
+  const S = 220, c = S / 2, pad = 14;
+  const rCaseMm = g.outer_d_mm / 2 + 3;
+  const k = (S / 2 - pad) / rCaseMm;
+  const rCase = rCaseMm * k;
+  const rGrain = (g.outer_d_mm / 2) * k;
+  const rCore = Math.min(g.core_d_mm / 2 + webMm, g.outer_d_mm / 2) * k;
+  $("faceView").innerHTML = `
+    <circle cx="${c}" cy="${c}" r="${rCase}" fill="#201f1e" stroke="#55534d" stroke-width="2"/>
+    <circle cx="${c}" cy="${c}" r="${rGrain}" fill="rgba(57,135,229,0.25)" stroke="rgba(57,135,229,0.9)"/>
+    <circle cx="${c}" cy="${c}" r="${rCore}" fill="#141413" stroke="rgba(57,135,229,0.9)"/>
+    <circle cx="${c}" cy="${c}" r="${(g.core_d_mm / 2) * k}" fill="none" stroke="#55534d" stroke-dasharray="3 4"/>
+    <text x="${c}" y="${S - 3}" fill="#8f8e84" font-size="10" text-anchor="middle">face view</text>`;
+}
+
+function drawSide(g, webMm) {
+  const W = 560, H = 220, pad = 26, cy = H / 2;
+  const gap = 3, bulk = 10, fwd = 6;
+  const grainLen = g.segments * g.length_mm + (g.segments - 1) * gap;
+  const chamberLen = bulk + fwd + grainLen + 5;
+  const maxDia = g.outer_d_mm + 12;
+  const s = Math.min((W - 2 * pad) / chamberLen, (H - 2 * pad) / maxDia);
+  const x0 = (W - chamberLen * s) / 2;
+  const grainR = (g.outer_d_mm / 2) * s;
+  const caseR = grainR + 3 * s;
+  const coreR = Math.min(g.core_d_mm / 2 + webMm, g.outer_d_mm / 2) * s;
+  const lenNow = Math.max(g.length_mm - 2 * webMm, 0);
+
+  const el = [];
+  el.push(`<line x1="${x0 - 10}" y1="${cy}" x2="${x0 + chamberLen * s + 10}" y2="${cy}" stroke="#3a3937" stroke-dasharray="6 5"/>`);
+  el.push(`<rect x="${x0}" y="${cy - caseR}" width="${chamberLen * s}" height="${2 * caseR}" rx="4" fill="#201f1e" stroke="#55534d" stroke-width="1.5"/>`);
+  for (let i = 0; i < g.segments; i++) {
+    const cxSeg = x0 + (bulk + fwd + i * (g.length_mm + gap) + g.length_mm / 2) * s;
+    const gx = cxSeg - (lenNow / 2) * s;
+    const gw = lenNow * s;
+    // original outline
+    el.push(`<rect x="${cxSeg - (g.length_mm / 2) * s}" y="${cy - grainR}" width="${g.length_mm * s}" height="${2 * grainR}" fill="none" stroke="#3a3937" stroke-dasharray="3 4"/>`);
+    if (gw > 0 && grainR > coreR) {
+      el.push(`<rect x="${gx}" y="${cy - grainR}" width="${gw}" height="${grainR - coreR}" fill="rgba(57,135,229,0.25)" stroke="rgba(57,135,229,0.85)"/>`);
+      el.push(`<rect x="${gx}" y="${cy + coreR}" width="${gw}" height="${grainR - coreR}" fill="rgba(57,135,229,0.25)" stroke="rgba(57,135,229,0.85)"/>`);
+    }
+  }
+  el.push(`<text x="${W / 2}" y="${H - 6}" fill="#8f8e84" font-size="10" text-anchor="middle">side section — dashed = original grain</text>`);
+  $("sideView").innerHTML = el.join("");
+}
+
+function stopPlayback(label) {
+  playing = false;
+  clearInterval(playTimer);
+  playTimer = null;
+  $("playBtn").textContent = label;
+}
+
+function tick() {
+  if (!playing || !sim) return;
+  const now = performance.now();
+  const dt = (now - lastTick) / 1000;
+  lastTick = now;
+  playhead += dt * parseFloat($("speed").value);
+  if (playhead >= sim.burn_time) {
+    playhead = sim.burn_time;
+    stopPlayback("▶ Replay");
+  }
+  setFrame(frameIndex(playhead));
+}
+
+$("playBtn").addEventListener("click", () => {
+  if (!sim) return;
+  if (playing) {
+    stopPlayback("▶ Play");
+  } else {
+    if (playhead >= sim.burn_time) playhead = 0;
+    playing = true;
+    $("playBtn").textContent = "⏸ Pause";
+    lastTick = performance.now();
+    playTimer = setInterval(tick, 33);
+  }
+});
+
+$("scrubber").addEventListener("input", () => {
+  if (!sim) return;
+  stopPlayback("▶ Play");
+  const i = parseInt($("scrubber").value, 10);
+  playhead = sim.time[i];
+  setFrame(i);
+});
+
+// ---------- tabs ----------
+
+document.querySelectorAll(".steps .step").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".steps .step").forEach((b) => b.classList.toggle("active", b === btn));
+    for (const name of ["propellant", "motor", "simulation"]) {
+      $(`tab-${name}`).hidden = name !== btn.dataset.tab;
+    }
+    if (btn.dataset.tab === "simulation" && (simStale || !sim)) runSimulation();
+    if (btn.dataset.tab === "motor" && lastDesign) viewer.rebuild(lastDesign.geometry);
+  });
+});
+
+// ---------- wiring ----------
+
+document.querySelectorAll("#propMode .seg").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#propMode .seg").forEach((b) => b.classList.toggle("active", b === btn));
+    $("libraryForm").hidden = btn.dataset.mode !== "library";
+    $("customForm").hidden = btn.dataset.mode !== "custom";
+    refreshDesign();
+  });
+});
+
+for (const id of [...GRAIN_IDS, ...NOZZLE_IDS, "propellant", ...CUSTOM_IDS.map((f) => `c_${f}`)]) {
+  $(id).addEventListener("input", debounce(refreshDesign, 200));
+}
+
+$("projectName").addEventListener("blur", () => {
+  project.name = $("projectName").textContent.trim() || project.name;
+  $("projectName").textContent = project.name;
+  save();
+});
+$("projectName").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); $("projectName").blur(); }
+});
+
+$("cutaway").addEventListener("change", (e) => viewer.setCutaway(e.target.checked));
+$("resetView").addEventListener("click", () => viewer.resetView());
+$("stlBtn").addEventListener("click", () => {
+  const g = project.grain;
+  location.href = `/api/stl?outer_d_mm=${g.outer_d_mm}&core_d_mm=${g.core_d_mm}&length_mm=${g.length_mm}`;
+});
+
+// ---------- boot ----------
+
+async function boot() {
+  const [projRes, libRes] = await Promise.all([
+    fetch(`/api/projects/${window.PROJECT_ID}`),
+    fetch("/api/propellants"),
+  ]);
+  project = await projRes.json();
+  library = await libRes.json();
+
+  const select = $("propellant");
+  for (const [key, p] of Object.entries(library)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = p.name;
+    select.appendChild(opt);
+  }
+
+  viewer = new MotorViewer($("viewer3d"));
+  stateToForms();
+  renderPropellantTab();
+  await refreshDesign();
+}
+
+boot();

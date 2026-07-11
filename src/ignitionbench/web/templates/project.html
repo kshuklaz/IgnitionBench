@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IgnitionBench — Designer</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script type="importmap">
+{ "imports": { "three": "{{ url_for('static', filename='vendor/three.module.min.js') }}" } }
+</script>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <a class="back" href="/" title="All projects">‹</a>
+    <span class="flame">▲</span>
+    <div>
+      <h1 id="projectName" contenteditable="true" spellcheck="false">…</h1>
+      <p><span id="saveState" class="save-state">Saved</span></p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="cert-chip" id="certChip" hidden></div>
+    <div class="class-badge" id="classBadge" title="NAR/TRA impulse class">—</div>
+  </div>
+</header>
+
+<nav class="steps">
+  <button class="step active" data-tab="propellant"><span class="step-num">1</span> Propellant</button>
+  <button class="step" data-tab="motor"><span class="step-num">2</span> Motor design</button>
+  <button class="step" data-tab="simulation"><span class="step-num">3</span> Simulation</button>
+</nav>
+
+<main class="designer">
+
+  <!-- ============ TAB 1 : PROPELLANT ============ -->
+  <section class="tab" id="tab-propellant">
+    <div class="tab-grid">
+      <div class="panel">
+        <h2>Propellant source</h2>
+        <div class="segmented" id="propMode">
+          <button class="seg active" data-mode="library">Library</button>
+          <button class="seg" data-mode="custom">Custom batch</button>
+        </div>
+
+        <div id="libraryForm">
+          <label for="propellant">Formulation</label>
+          <select id="propellant"></select>
+          <table class="spec" id="libMeta"></table>
+        </div>
+
+        <div id="customForm" hidden>
+          <label>Batch name <input id="c_name" type="text" maxlength="48"></label>
+          <div class="field-grid">
+            <label>a — burn coeff <span class="unit">mm/s at MPa</span><input id="c_a_mm_mpa" type="number" step="0.01" min="0.01"></label>
+            <label>n — exponent <input id="c_n" type="number" step="0.01" min="0.01" max="0.99"></label>
+            <label>Density <span class="unit">kg/m³</span><input id="c_density" type="number" step="1" min="1"></label>
+            <label>γ — exhaust <input id="c_gamma" type="number" step="0.001" min="1.01"></label>
+            <label>Flame temp <span class="unit">K</span><input id="c_temp_k" type="number" step="10" min="300"></label>
+            <label>Molar mass <span class="unit">g/mol</span><input id="c_molar_g" type="number" step="0.1" min="1"></label>
+            <label>Valid from <span class="unit">MPa</span><input id="c_min_mpa" type="number" step="0.1" min="0.01"></label>
+            <label>Valid to <span class="unit">MPa</span><input id="c_max_mpa" type="number" step="0.1" min="0.1"></label>
+          </div>
+          <p class="footnote">Vieille's law r = a·Pⁿ. Get a and n from strand-burner
+          tests of your batch, or start from published data for a similar formulation.
+          c* is derived from γ, flame temperature, and molar mass.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Burn rate vs pressure</h2>
+        <div class="chart" id="burnRateChart"></div>
+        <p class="footnote" id="propSummary"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 2 : MOTOR DESIGN ============ -->
+  <section class="tab" id="tab-motor" hidden>
+    <div class="banner" id="designError" hidden></div>
+    <div class="tab-grid motor-grid">
+      <div class="panel inputs">
+        <h2>Geometry</h2>
+        <h3>BATES grain</h3>
+        <div class="field-grid">
+          <label>Segments <input id="segments" type="number" min="1" max="10" step="1"></label>
+          <label>Outer Ø <span class="unit">mm</span> <input id="outer_d_mm" type="number" min="1" step="0.5"></label>
+          <label>Core Ø <span class="unit">mm</span> <input id="core_d_mm" type="number" min="1" step="0.5"></label>
+          <label>Length <span class="unit">mm</span> <input id="length_mm" type="number" min="1" step="1"></label>
+        </div>
+        <h3>Nozzle</h3>
+        <div class="field-grid">
+          <label>Throat Ø <span class="unit">mm</span> <input id="throat_d_mm" type="number" min="0.5" step="0.5"></label>
+          <label>Half-angle <span class="unit">°</span> <input id="half_angle_deg" type="number" min="5" max="30" step="1"></label>
+        </div>
+
+        <h3>Nozzle spec</h3>
+        <table class="spec">
+          <tr><td>Expansion ratio ε</td><td id="n_eps">—</td></tr>
+          <tr><td>Exit diameter</td><td id="n_exit">—</td></tr>
+          <tr><td>Divergent length</td><td id="n_div">—</td></tr>
+          <tr><td>Propellant mass</td><td id="n_mass">—</td></tr>
+          <tr><td>Port / throat</td><td id="n_p2t">—</td></tr>
+        </table>
+        <button class="btn" id="stlBtn" title="Export one grain segment as STL for CAD or 3D printing">⬇ Export grain STL</button>
+      </div>
+
+      <div class="viewer-col">
+        <div class="tiles small">
+          <div class="tile"><span class="label">Kn</span><span class="value" id="v_kn">—</span></div>
+          <div class="tile"><span class="label">Pressure</span><span class="value" id="v_pc">—</span><span class="sub" id="s_pc"></span></div>
+          <div class="tile"><span class="label">Thrust</span><span class="value" id="v_thrust">—</span></div>
+          <div class="tile"><span class="label">Class</span><span class="value" id="v_class">—</span><span class="sub" id="s_cert"></span></div>
+        </div>
+        <div class="panel viewer-panel">
+          <div class="viewer-toolbar">
+            <h2>3D model</h2>
+            <div class="viewer-controls">
+              <label class="check"><input type="checkbox" id="cutaway" checked> Cutaway</label>
+              <button class="btn small" id="resetView">Reset view</button>
+            </div>
+          </div>
+          <canvas id="viewer3d"></canvas>
+          <p class="footnote">Drag to orbit · scroll to zoom · right-drag to pan — rendered with Three.js</p>
+        </div>
+        <div class="panel">
+          <h2>Safety</h2>
+          <ul class="warnings" id="warnings"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 3 : SIMULATION ============ -->
+  <section class="tab" id="tab-simulation" hidden>
+    <div class="banner" id="simError" hidden></div>
+
+    <div class="tiles" id="simTiles">
+      <div class="tile"><span class="label">Max thrust</span><span class="value" id="m_maxF">—</span><span class="sub" id="s_avgF"></span></div>
+      <div class="tile"><span class="label">Max pressure</span><span class="value" id="m_maxP">—</span><span class="sub" id="s_maxP"></span></div>
+      <div class="tile"><span class="label">Burn time</span><span class="value" id="m_tb">—</span></div>
+      <div class="tile"><span class="label">Total impulse</span><span class="value" id="m_It">—</span><span class="sub" id="s_class"></span></div>
+      <div class="tile"><span class="label">Isp delivered</span><span class="value" id="m_isp">—</span></div>
+      <div class="tile"><span class="label">Peak Kn</span><span class="value" id="m_kn">—</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="anim-toolbar">
+        <h2>Grain regression</h2>
+        <div class="anim-controls">
+          <button class="btn small" id="playBtn">▶ Play</button>
+          <select id="speed">
+            <option value="0.25">0.25×</option>
+            <option value="0.5" selected>0.5×</option>
+            <option value="1">1×</option>
+          </select>
+          <span class="anim-time" id="animTime">t = 0.00 s</span>
+        </div>
+      </div>
+      <input type="range" id="scrubber" min="0" max="240" value="0" step="1">
+      <div class="anim-views">
+        <svg id="faceView" viewBox="0 0 220 220" role="img" aria-label="Grain face view"></svg>
+        <svg id="sideView" viewBox="0 0 560 220" role="img" aria-label="Motor side cross-section"></svg>
+      </div>
+      <div class="anim-readout" id="animReadout"></div>
+    </div>
+
+    <div class="tab-grid">
+      <div class="panel"><h2>Thrust curve</h2><div class="chart" id="thrustChart"></div></div>
+      <div class="panel"><h2>Chamber pressure</h2><div class="chart" id="pressureChart"></div></div>
+    </div>
+  </section>
+</main>
+
+<script>window.PROJECT_ID = {{ project_id | tojson }};</script>
+<script type="module" src="{{ url_for('static', filename='project.js') }}"></script>
+</body>
+</html>
