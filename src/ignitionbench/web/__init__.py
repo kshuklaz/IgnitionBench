@@ -161,6 +161,7 @@ def _design_result(prop: Propellant, grain: BatesGrain, throat_area: float, half
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    app.config["TEMPLATES_AUTO_RELOAD"] = True  # local tool; pick up edits without restart
 
     # ---- pages ----
 

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IgnitionBench — Designer</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
 <script type="importmap">
 { "imports": { "three": "{{ url_for('static', filename='vendor/three.module.min.js') }}" } }
 </script>
@@ -13,7 +14,7 @@
 <header>
   <div class="brand">
     <a class="back" href="/" title="All projects">‹</a>
-    <span class="flame">▲</span>
+    <img class="logo" src="{{ url_for('static', filename='logo.svg') }}" alt="">
     <div>
       <h1 id="projectName" contenteditable="true" spellcheck="false">…</h1>
       <p><span id="saveState" class="save-state">Saved</span></p>
