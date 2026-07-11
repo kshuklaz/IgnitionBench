@@ -92,6 +92,32 @@ def test_design_endpoint_flags_overpressure(client):
     assert "overpressure" in res.get_json()["error"]
 
 
+def test_design_and_simulate_with_slotted_grain(client):
+    slotted = {
+        **DESIGN,
+        "grain": {
+            **DESIGN["grain"],
+            "slit_count": 3,
+            "slit_depth_mm": 8,
+            "slit_width_mm": 3,
+            "slit_taper_pct": 30,
+        },
+    }
+    plain = client.post("/api/design", json=DESIGN).get_json()
+    d = client.post("/api/design", json=slotted).get_json()
+    assert d["kn"] > 1.2 * plain["kn"]  # slits add burning surface
+    assert d["geometry"]["slit_count"] == 3
+
+    sim = client.post("/api/simulate", json=slotted)
+    assert sim.status_code == 200
+    assert sim.get_json()["thrust"][-1] == 0.0
+
+    too_deep = {**slotted, "grain": {**slotted["grain"], "slit_depth_mm": 17}}
+    res = client.post("/api/design", json=too_deep)
+    assert res.status_code == 422
+    assert "all the way through" in res.get_json()["error"]
+
+
 def test_simulate_endpoint(client):
     res = client.post("/api/simulate", json=DESIGN)
     assert res.status_code == 200

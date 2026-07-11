@@ -38,10 +38,12 @@ Then open http://localhost:8000 — a dark design studio:
   `~/.ignitionbench/projects/`), each carded with its impulse class.
 - **Step 1 · Propellant** — pick a library formulation or enter a custom
   batch (a, n, density, γ, flame temp, molar mass) with a live burn-rate chart.
-- **Step 2 · Motor design** — BATES grain + nozzle inputs, live Kn/pressure/
-  thrust/class tiles, NAR/TRA certification requirement, safety warnings,
-  an interactive Three.js 3D model with cutaway view, and STL export of the
-  grain segment for CAD or 3D printing.
+- **Step 2 · Motor design** — BATES grain + nozzle inputs, optional tapered
+  radial slits (count, depth, width, tip taper — regressed with a 2D
+  distance-field model), live Kn/pressure/thrust/class tiles, NAR/TRA
+  certification requirement, safety warnings, an interactive Three.js 3D
+  model with cutaway view, and STL export of the grain segment for CAD or
+  3D printing.
 - **Step 3 · Simulation** — burn-regression simulator with an animated grain
   (face + side views, play/scrub), thrust and chamber-pressure curves with a
   synced time cursor, and delivered performance numbers.

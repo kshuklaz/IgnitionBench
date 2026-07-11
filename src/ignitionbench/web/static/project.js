@@ -9,7 +9,10 @@ const debounce = (fn, ms) => {
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 };
 
-const GRAIN_IDS = ["segments", "outer_d_mm", "core_d_mm", "length_mm"];
+const GRAIN_IDS = [
+  "segments", "outer_d_mm", "core_d_mm", "length_mm",
+  "slit_count", "slit_depth_mm", "slit_width_mm", "slit_taper_pct",
+];
 const NOZZLE_IDS = ["throat_d_mm", "half_angle_deg"];
 const CUSTOM_IDS = ["name", "a_mm_mpa", "n", "density", "gamma", "temp_k", "molar_g", "min_mpa", "max_mpa"];
 
@@ -188,6 +191,12 @@ async function refreshDesign() {
     thrust_n: d.thrust_n,
   };
 
+  const stlBtn = $("stlBtn");
+  stlBtn.disabled = project.grain.slit_count > 0;
+  stlBtn.title = stlBtn.disabled
+    ? "STL export currently supports plain BATES grains only"
+    : "Export one grain segment as STL for CAD or 3D printing";
+
   viewer.rebuild(d.geometry);
 }
 
@@ -267,6 +276,25 @@ function setFrame(i) {
   charts.pressure?.setCursor(sim.time[i]);
 }
 
+// Wedge outline of slit k in mm coordinates centred on the motor axis.
+// Starts slightly inside the core so the polygon fuses with the core circle.
+function slitPolygon(g, k) {
+  const rc = g.core_d_mm / 2;
+  const tip = rc + g.slit_depth_mm;
+  const mouthHalf = g.slit_width_mm / 2;
+  const tipHalf = mouthHalf * ((g.slit_taper_pct ?? 0) / 100);
+  const th = (2 * Math.PI * k) / g.slit_count - Math.PI / 2;
+  const ux = Math.cos(th), uy = Math.sin(th);
+  const vx = -uy, vy = ux;
+  const r0 = rc * 0.9;
+  return [
+    [r0 * ux - mouthHalf * vx, r0 * uy - mouthHalf * vy],
+    [tip * ux - tipHalf * vx, tip * uy - tipHalf * vy],
+    [tip * ux + tipHalf * vx, tip * uy + tipHalf * vy],
+    [r0 * ux + mouthHalf * vx, r0 * uy + mouthHalf * vy],
+  ];
+}
+
 function drawFace(g, webMm) {
   const S = 220, c = S / 2, pad = 14;
   const rCaseMm = g.outer_d_mm / 2 + 3;
@@ -274,11 +302,30 @@ function drawFace(g, webMm) {
   const rCase = rCaseMm * k;
   const rGrain = (g.outer_d_mm / 2) * k;
   const rCore = Math.min(g.core_d_mm / 2 + webMm, g.outer_d_mm / 2) * k;
+  const slits = g.slit_count > 0
+    ? Array.from({ length: g.slit_count }, (_, i) => slitPolygon(g, i))
+    : [];
+  const toPath = (poly) =>
+    poly.map(([x, y], i) => `${i ? "L" : "M"}${(c + x * k).toFixed(2)},${(c + y * k).toFixed(2)}`).join("") + "Z";
+
+  // burned region = initial void dilated by the web distance; a round-joined
+  // stroke of width 2·web on the slit wedge is exactly that dilation
+  const burnedSlits = slits.map((poly) =>
+    `<path d="${toPath(poly)}" fill="#141413" stroke="#141413" stroke-width="${2 * webMm * k}" stroke-linejoin="round" stroke-linecap="round"/>`).join("");
+  const originalSlits = slits.map((poly) =>
+    `<path d="${toPath(poly)}" fill="none" stroke="#55534d" stroke-dasharray="3 4"/>`).join("");
+
   $("faceView").innerHTML = `
+    <defs><clipPath id="grainClip"><circle cx="${c}" cy="${c}" r="${rGrain}"/></clipPath></defs>
     <circle cx="${c}" cy="${c}" r="${rCase}" fill="#201f1e" stroke="#55534d" stroke-width="2"/>
     <circle cx="${c}" cy="${c}" r="${rGrain}" fill="rgba(57,135,229,0.25)" stroke="rgba(57,135,229,0.9)"/>
-    <circle cx="${c}" cy="${c}" r="${rCore}" fill="#141413" stroke="rgba(57,135,229,0.9)"/>
-    <circle cx="${c}" cy="${c}" r="${(g.core_d_mm / 2) * k}" fill="none" stroke="#55534d" stroke-dasharray="3 4"/>
+    <g clip-path="url(#grainClip)">
+      <circle cx="${c}" cy="${c}" r="${rCore}" fill="#141413"/>
+      ${burnedSlits}
+      <circle cx="${c}" cy="${c}" r="${(g.core_d_mm / 2) * k}" fill="none" stroke="#55534d" stroke-dasharray="3 4"/>
+      ${originalSlits}
+    </g>
+    <circle cx="${c}" cy="${c}" r="${rGrain}" fill="none" stroke="rgba(57,135,229,0.9)"/>
     <text x="${c}" y="${S - 3}" fill="#8f8e84" font-size="10" text-anchor="middle">face view</text>`;
 }
 
@@ -407,6 +454,11 @@ async function boot() {
   ]);
   project = await projRes.json();
   library = await libRes.json();
+  // projects saved before slits existed get the defaults
+  project.grain = {
+    slit_count: 0, slit_depth_mm: 8, slit_width_mm: 3, slit_taper_pct: 30,
+    ...project.grain,
+  };
 
   const select = $("propellant");
   for (const [key, p] of Object.entries(library)) {

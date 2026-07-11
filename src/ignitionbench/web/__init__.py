@@ -22,6 +22,7 @@ from ignitionbench.propellant import (
     BatesGrain,
     BurnRateSegment,
     Propellant,
+    SlottedGrain,
     kn,
     port_to_throat,
     steady_state_pressure,
@@ -76,12 +77,25 @@ def _parse_design(data: dict) -> tuple[Propellant, BatesGrain, float, float]:
     g = data.get("grain", {})
     nz = data.get("nozzle", {})
     try:
-        grain = BatesGrain(
-            int(g["segments"]),
-            float(g["outer_d_mm"]) / 1000,
-            float(g["core_d_mm"]) / 1000,
-            float(g["length_mm"]) / 1000,
-        )
+        slit_count = int(g.get("slit_count") or 0)
+        if slit_count > 0:
+            grain = SlottedGrain(
+                int(g["segments"]),
+                float(g["outer_d_mm"]) / 1000,
+                float(g["core_d_mm"]) / 1000,
+                float(g["length_mm"]) / 1000,
+                slit_count=slit_count,
+                slit_depth=float(g["slit_depth_mm"]) / 1000,
+                slit_width=float(g["slit_width_mm"]) / 1000,
+                slit_taper=float(g.get("slit_taper_pct") or 0) / 100,
+            )
+        else:
+            grain = BatesGrain(
+                int(g["segments"]),
+                float(g["outer_d_mm"]) / 1000,
+                float(g["core_d_mm"]) / 1000,
+                float(g["length_mm"]) / 1000,
+            )
         throat_d = float(nz["throat_d_mm"]) / 1000
         half_angle = float(nz["half_angle_deg"])
     except (KeyError, TypeError) as exc:
@@ -151,6 +165,10 @@ def _design_result(prop: Propellant, grain: BatesGrain, throat_area: float, half
             "outer_d_mm": grain.outer_diameter * 1000,
             "core_d_mm": grain.core_diameter * 1000,
             "length_mm": grain.segment_length * 1000,
+            "slit_count": getattr(grain, "slit_count", 0),
+            "slit_depth_mm": getattr(grain, "slit_depth", 0.0) * 1000,
+            "slit_width_mm": getattr(grain, "slit_width", 0.0) * 1000,
+            "slit_taper": getattr(grain, "slit_taper", 0.0),
             "throat_d_mm": throat_d * 1000,
             "exit_d_mm": nozzle.exit_diameter * 1000,
             "divergent_length_mm": nozzle.divergent_length * 1000,

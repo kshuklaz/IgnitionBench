@@ -40,7 +40,16 @@ def _default_project(name: str) -> dict:
                 "max_mpa": 8.0,
             },
         },
-        "grain": {"segments": 3, "outer_d_mm": 54, "core_d_mm": 20, "length_mm": 95},
+        "grain": {
+            "segments": 3,
+            "outer_d_mm": 54,
+            "core_d_mm": 20,
+            "length_mm": 95,
+            "slit_count": 0,
+            "slit_depth_mm": 8,
+            "slit_width_mm": 3,
+            "slit_taper_pct": 30,
+        },
         "nozzle": {"throat_d_mm": 15, "half_angle_deg": 15},
         "summary": {},
     }

@@ -7,6 +7,33 @@ import { OrbitControls } from "./vendor/OrbitControls.js";
 const MM = 1 / 1000;
 const WALL = 3, BULKHEAD = 10, FWD = 6, AFT = 5, GAP = 3; // mm, visual construction
 
+// Outline (mm) of the core circle fused with the tapered slit wedges —
+// one closed loop walked counter-clockwise: core arc, out along a slit
+// wall to its tip, back, next arc…
+function voidOutline(g) {
+  const rc = g.core_d_mm / 2;
+  const tip = rc + g.slit_depth_mm;
+  const mouthHalf = g.slit_width_mm / 2;
+  const tipHalf = mouthHalf * (g.slit_taper ?? 0);
+  const beta = Math.asin(Math.min(mouthHalf / rc, 1));
+  const points = [];
+  for (let k = 0; k < g.slit_count; k++) {
+    const th = (2 * Math.PI * k) / g.slit_count - Math.PI / 2;
+    const prev = th - (2 * Math.PI) / g.slit_count;
+    // core arc from the previous slit's exit to this slit's entry
+    const a0 = prev + beta, a1 = th - beta;
+    for (let i = 0; i <= 14; i++) {
+      const a = a0 + ((a1 - a0) * i) / 14;
+      points.push([rc * Math.cos(a), rc * Math.sin(a)]);
+    }
+    const ux = Math.cos(th), uy = Math.sin(th);
+    const vx = -uy, vy = ux;
+    points.push([tip * ux - tipHalf * vx, tip * uy - tipHalf * vy]);
+    points.push([tip * ux + tipHalf * vx, tip * uy + tipHalf * vy]);
+  }
+  return points;
+}
+
 export class MotorViewer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -95,11 +122,16 @@ export class MotorViewer {
     cap.position.x = (BULKHEAD * MM) / 2;
     group.add(cap);
 
-    // grain segments: true annulus, extruded
+    // grain segments: true annulus, extruded; the hole is the core circle
+    // fused with the slit wedges when slits are present
     const shape = new THREE.Shape();
     shape.absarc(0, 0, rGrain, 0, Math.PI * 2, false);
     const hole = new THREE.Path();
-    hole.absarc(0, 0, rCore, 0, Math.PI * 2, true);
+    if (g.slit_count > 0) {
+      hole.setFromPoints(voidOutline(g).map(([x, y]) => new THREE.Vector2(x * MM, y * MM)));
+    } else {
+      hole.absarc(0, 0, rCore, 0, Math.PI * 2, true);
+    }
     shape.holes.push(hole);
     const grainGeom = new THREE.ExtrudeGeometry(shape, { depth: segLen, bevelEnabled: false, curveSegments: 48 });
     grainGeom.rotateY(Math.PI / 2);

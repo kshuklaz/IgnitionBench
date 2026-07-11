@@ -18,6 +18,7 @@ from .database import (
     Propellant,
 )
 from .grain import BatesGrain
+from .grain2d import SlottedGrain
 
 __all__ = [
     "BLUE_THUNDER",
@@ -32,6 +33,7 @@ __all__ = [
     "BatesGrain",
     "BurnRateSegment",
     "Propellant",
+    "SlottedGrain",
     "kn",
     "kn_for_pressure",
     "port_to_throat",
