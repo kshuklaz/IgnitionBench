@@ -17,9 +17,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "flask",
 ]
 web = [
-    "streamlit",
+    "flask",
 ]
 
 [tool.setuptools.packages.find]

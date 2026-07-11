@@ -23,8 +23,19 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the phased plan and
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,web]"
 ```
+
+## Run the web UI
+
+```bash
+python -m ignitionbench.web
+```
+
+Then open http://localhost:8000 — a dark, live-updating motor designer:
+pick a propellant, set BATES grain and nozzle dimensions, and watch Kn,
+chamber pressure, thrust, impulse class, the motor cross-section, and
+safety warnings update as you type.
 
 ## Quickstart
 
