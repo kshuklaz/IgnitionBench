@@ -191,7 +191,11 @@ async function refreshDesign() {
     thrust_n: d.thrust_n,
   };
 
-  viewer.rebuild(d.geometry);
+  try {
+    viewer.rebuild(d.geometry);
+  } catch (err) {
+    console.error("3D viewer rebuild failed", err);
+  }
   drawNozzleSection(d.geometry);
 }
 

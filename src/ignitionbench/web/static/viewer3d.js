@@ -136,6 +136,7 @@ export class MotorViewer {
     this.viewDist = 0.45;
 
     this._resize();
+    window.__ibViewer = this; // debug handle
     new ResizeObserver(() => this._resize()).observe(canvas.parentElement);
     this.renderer.setAnimationLoop(() => {
       this.controls.update();
@@ -146,6 +147,7 @@ export class MotorViewer {
   _resize() {
     const w = this.canvas.parentElement.clientWidth - 2;
     const h = 380;
+    if (w <= 0) return; // hidden tab — a zero/negative size corrupts the projection
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -162,6 +164,14 @@ export class MotorViewer {
   }
 
   rebuild(g) {
+    // NaN or a missing field would propagate silently through the scene and
+    // blank the whole viewer (nothing renders, no error) — refuse it instead
+    const dims = [g.outer_d_mm, g.core_d_mm, g.length_mm, g.segments,
+      g.throat_d_mm, g.exit_d_mm, g.divergent_length_mm];
+    if (!dims.every(Number.isFinite)) {
+      console.warn("MotorViewer: skipped rebuild, non-finite geometry", g);
+      return;
+    }
     if (this.group) {
       this.scene.remove(this.group);
       this.group.traverse((o) => {
@@ -248,6 +258,10 @@ export class MotorViewer {
     this.group = group;
 
     this.viewDist = Math.max(total * 1.55, rCase * 8);
+    // clamp orbit zoom: unbounded, one scroll gesture can carry the camera
+    // past the far plane (or inside the model) and the scene goes blank
+    this.controls.minDistance = rCase * 2.5;
+    this.controls.maxDistance = Math.min(this.viewDist * 5, this.camera.far * 0.9);
     this.grid.position.y = -(rCase + 0.004);
     this.grid.scale.setScalar(Math.max(total * 2.5, 0.25));
     if (!this._placed) {
