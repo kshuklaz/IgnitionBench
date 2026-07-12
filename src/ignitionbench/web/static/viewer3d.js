@@ -1,37 +1,110 @@
 // Interactive 3D motor model built with Three.js (MIT-licensed, vendored).
 // Dimensions arrive in mm; the scene works in metres.
+//
+// The section view is real geometry, not a clipping plane: every part is
+// built as a 270° solid with capped cut faces (extruded sector outlines;
+// the nozzle is a partial lathe plus two profile caps), so the interior
+// reads like a CAD quarter-section instead of a hollow shell.
 
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/OrbitControls.js";
 
 const MM = 1 / 1000;
 const WALL = 3, BULKHEAD = 10, FWD = 6, AFT = 5, GAP = 3; // mm, visual construction
+const SWEEP_START = Math.PI; // kept sector 180°→450°: the +y/+z quadrant is removed
+const SWEEP = Math.PI * 1.5;
 
-// Outline (mm) of the core circle fused with the tapered slit wedges —
-// one closed loop walked counter-clockwise: core arc, out along a slit
-// wall to its tip, back, next arc…
-function voidOutline(g) {
+// Distance from the axis to the void boundary along the ray at theta (mm).
+// Mirrors the exact wedge math used by the STL exporter.
+function innerRadiusAt(g, theta) {
   const rc = g.core_d_mm / 2;
-  const tip = rc + g.slit_depth_mm;
+  if (!g.slit_count) return rc;
   const mouthHalf = g.slit_width_mm / 2;
   const tipHalf = mouthHalf * (g.slit_taper ?? 0);
-  const beta = Math.asin(Math.min(mouthHalf / rc, 1));
-  const points = [];
+  const narrowing = (mouthHalf - tipHalf) / g.slit_depth_mm;
+  let best = rc;
   for (let k = 0; k < g.slit_count; k++) {
-    const th = (2 * Math.PI * k) / g.slit_count - Math.PI / 2;
-    const prev = th - (2 * Math.PI) / g.slit_count;
-    // core arc from the previous slit's exit to this slit's entry
-    const a0 = prev + beta, a1 = th - beta;
-    for (let i = 0; i <= 14; i++) {
-      const a = a0 + ((a1 - a0) * i) / 14;
-      points.push([rc * Math.cos(a), rc * Math.sin(a)]);
+    const axis = (2 * Math.PI * k) / g.slit_count - Math.PI / 2;
+    const delta = Math.atan2(Math.sin(theta - axis), Math.cos(theta - axis));
+    const cosD = Math.cos(delta), sinD = Math.abs(Math.sin(delta));
+    if (cosD <= 0) continue;
+    const denom = sinD + narrowing * cosD;
+    if (denom > 0) {
+      const rWall = (mouthHalf + narrowing * rc) / denom;
+      const depthAt = rWall * cosD - rc;
+      if (depthAt >= 0 && depthAt <= g.slit_depth_mm) {
+        best = Math.max(best, rWall);
+        continue;
+      }
     }
-    const ux = Math.cos(th), uy = Math.sin(th);
-    const vx = -uy, vy = ux;
-    points.push([tip * ux - tipHalf * vx, tip * uy - tipHalf * vy]);
-    points.push([tip * ux + tipHalf * vx, tip * uy + tipHalf * vy]);
+    const rTip = (rc + g.slit_depth_mm) / cosD;
+    if (rTip * sinD <= tipHalf) best = Math.max(best, rTip);
+  }
+  return best;
+}
+
+// Full-circle void outline (mm) for the uncut grain's extrude hole.
+function voidOutline(g) {
+  const points = [];
+  for (let i = 0; i < 360; i++) {
+    const a = (2 * Math.PI * i) / 360;
+    const r = innerRadiusAt(g, a);
+    points.push([r * Math.cos(a), r * Math.sin(a)]);
   }
   return points;
+}
+
+function ringSectorShape(rIn, rOut, cut) {
+  const shape = new THREE.Shape();
+  if (!cut) {
+    shape.absarc(0, 0, rOut, 0, Math.PI * 2, false);
+    const hole = new THREE.Path();
+    hole.absarc(0, 0, rIn, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+    return shape;
+  }
+  const a0 = SWEEP_START, a1 = SWEEP_START + SWEEP;
+  shape.absarc(0, 0, rOut, a0, a1, false);
+  shape.lineTo(rIn * Math.cos(a1), rIn * Math.sin(a1));
+  shape.absarc(0, 0, rIn, a1, a0, true);
+  shape.closePath();
+  return shape;
+}
+
+function discSectorShape(r, cut) {
+  const shape = new THREE.Shape();
+  if (!cut) {
+    shape.absarc(0, 0, r, 0, Math.PI * 2, false);
+    return shape;
+  }
+  shape.moveTo(0, 0);
+  shape.absarc(0, 0, r, SWEEP_START, SWEEP_START + SWEEP, false);
+  shape.closePath();
+  return shape;
+}
+
+// Grain cross-section (mm): outer arc, then the void boundary walked back,
+// so slits appear as notches in the cut faces.
+function grainShape(g, rOuter, cut) {
+  if (!cut) {
+    const shape = new THREE.Shape();
+    shape.absarc(0, 0, rOuter, 0, Math.PI * 2, false);
+    const hole = new THREE.Path();
+    hole.setFromPoints(voidOutline(g).map(([x, y]) => new THREE.Vector2(x, y)));
+    shape.holes.push(hole);
+    return shape;
+  }
+  const a0 = SWEEP_START, a1 = SWEEP_START + SWEEP;
+  const shape = new THREE.Shape();
+  shape.absarc(0, 0, rOuter, a0, a1, false);
+  const samples = 270;
+  for (let i = 0; i <= samples; i++) {
+    const a = a1 - (SWEEP * i) / samples;
+    const r = innerRadiusAt(g, a);
+    shape.lineTo(r * Math.cos(a), r * Math.sin(a));
+  }
+  shape.closePath();
+  return shape;
 }
 
 export class MotorViewer {
@@ -40,7 +113,6 @@ export class MotorViewer {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setClearColor(0x141413);
-    this.renderer.localClippingEnabled = true;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.005, 10);
@@ -55,15 +127,13 @@ export class MotorViewer {
     rim.position.set(-0.6, -0.3, -0.8);
     this.scene.add(rim);
 
-    this.clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
-    this.materials = [];
-    this.group = null;
-    this.cutaway = true;
-    this.viewDist = 0.45;
-
-    // CAD-style reference grid under the part
     this.grid = new THREE.GridHelper(1, 40, 0x33322f, 0x232221);
     this.scene.add(this.grid);
+
+    this.group = null;
+    this.cutaway = true;
+    this.lastGeometry = null;
+    this.viewDist = 0.45;
 
     this._resize();
     new ResizeObserver(() => this._resize()).observe(canvas.parentElement);
@@ -81,24 +151,30 @@ export class MotorViewer {
     this.camera.updateProjectionMatrix();
   }
 
-  _material(opts) {
-    const m = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...opts });
-    this.materials.push(m);
-    return m;
+  _mesh(geometry, material) {
+    const mesh = new THREE.Mesh(geometry, material);
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geometry, 30),
+      new THREE.LineBasicMaterial({ color: 0x101010, transparent: true, opacity: 0.6 }),
+    );
+    mesh.add(edges);
+    return mesh;
   }
 
   rebuild(g) {
     if (this.group) {
       this.scene.remove(this.group);
-      this.group.traverse((o) => o.geometry?.dispose());
-      this.materials.forEach((m) => m.dispose());
-      this.materials = [];
+      this.group.traverse((o) => {
+        o.geometry?.dispose();
+        o.material?.dispose();
+      });
     }
+    this.lastGeometry = g;
+    const cut = this.cutaway;
     const group = new THREE.Group();
 
     const rGrain = (g.outer_d_mm / 2) * MM;
     const rCase = rGrain + WALL * MM;
-    const rCore = (g.core_d_mm / 2) * MM;
     const rt = (g.throat_d_mm / 2) * MM;
     const re = (g.exit_d_mm / 2) * MM;
     const segLen = g.length_mm * MM;
@@ -108,63 +184,70 @@ export class MotorViewer {
     const div = g.divergent_length_mm * MM;
     const total = chamberLen + conv + div;
 
-    const steel = this._material({ color: 0x9aa0a8, metalness: 0.85, roughness: 0.38 });
-    const graphite = this._material({ color: 0x4c4944, metalness: 0.55, roughness: 0.6 });
-    const fuel = this._material({ color: 0x3987e5, metalness: 0.05, roughness: 0.9 });
+    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa0a8, metalness: 0.85, roughness: 0.38, side: THREE.DoubleSide });
+    const graphite = new THREE.MeshStandardMaterial({ color: 0x4c4944, metalness: 0.55, roughness: 0.6, side: THREE.DoubleSide });
+    const fuel = new THREE.MeshStandardMaterial({ color: 0x3f8ce8, metalness: 0.05, roughness: 0.88, side: THREE.DoubleSide });
 
-    // casing tube
-    const casing = new THREE.Mesh(
-      new THREE.CylinderGeometry(rCase, rCase, chamberLen, 64, 1, true), steel);
-    casing.rotation.z = Math.PI / 2;
-    casing.position.x = chamberLen / 2;
-    group.add(casing);
+    const extrudeOpts = (depth) => ({ depth, bevelEnabled: false, curveSegments: 56 });
 
-    // forward bulkhead
-    const cap = new THREE.Mesh(
-      new THREE.CylinderGeometry(rCase, rCase, BULKHEAD * MM, 64), steel);
-    cap.rotation.z = Math.PI / 2;
-    cap.position.x = (BULKHEAD * MM) / 2;
-    group.add(cap);
+    // casing: true wall thickness, quarter-sectioned when cut
+    const casingGeom = new THREE.ExtrudeGeometry(
+      ringSectorShape(rGrain / MM, rCase / MM, cut), extrudeOpts(chamberLen / MM));
+    casingGeom.scale(MM, MM, MM);
+    casingGeom.rotateY(Math.PI / 2);
+    group.add(this._mesh(casingGeom, steel));
 
-    // grain segments: true annulus, extruded; the hole is the core circle
-    // fused with the slit wedges when slits are present
-    const shape = new THREE.Shape();
-    shape.absarc(0, 0, rGrain, 0, Math.PI * 2, false);
-    const hole = new THREE.Path();
-    if (g.slit_count > 0) {
-      hole.setFromPoints(voidOutline(g).map(([x, y]) => new THREE.Vector2(x * MM, y * MM)));
-    } else {
-      hole.absarc(0, 0, rCore, 0, Math.PI * 2, true);
-    }
-    shape.holes.push(hole);
-    const grainGeom = new THREE.ExtrudeGeometry(shape, { depth: segLen, bevelEnabled: false, curveSegments: 48 });
+    // forward bulkhead: solid disc filling the bore
+    const capGeom = new THREE.ExtrudeGeometry(
+      discSectorShape((rGrain / MM) * 0.999, cut), extrudeOpts(BULKHEAD));
+    capGeom.scale(MM, MM, MM);
+    capGeom.rotateY(Math.PI / 2);
+    group.add(this._mesh(capGeom, steel));
+
+    // grain segments
+    const grainGeom = new THREE.ExtrudeGeometry(
+      grainShape(g, (g.outer_d_mm / 2) * 0.998, cut), extrudeOpts(g.length_mm));
+    grainGeom.scale(MM, MM, MM);
     grainGeom.rotateY(Math.PI / 2);
     for (let i = 0; i < g.segments; i++) {
-      const seg = new THREE.Mesh(grainGeom, fuel);
+      const seg = this._mesh(grainGeom.clone(), fuel);
       seg.position.x = (BULKHEAD + FWD) * MM + i * (segLen + GAP * MM);
       group.add(seg);
     }
 
-    // nozzle: lathe profile (radius, axial) closed into a solid shell
+    // nozzle: partial lathe plus profile caps on the cut planes
+    // closed, non-self-intersecting profile: inlet → throat → exit along the
+    // flow contour, then back along the outer shell (wall-offset from the
+    // 45° convergent) to the casing radius
     const profile = [
       new THREE.Vector2(rGrain, 0),
       new THREE.Vector2(rt, conv),
       new THREE.Vector2(re, conv + div),
       new THREE.Vector2(re + WALL * MM, conv + div),
-      new THREE.Vector2(Math.max(rt + WALL * MM, re * 0.55 + WALL * MM), conv * 0.55),
+      new THREE.Vector2(rGrain - conv * 0.55 + WALL * MM, conv * 0.55),
       new THREE.Vector2(rCase, 0),
     ];
-    const nozzle = new THREE.Mesh(new THREE.LatheGeometry(profile, 64), graphite);
-    nozzle.rotation.z = -Math.PI / 2;
-    nozzle.position.x = chamberLen;
-    group.add(nozzle);
+    const nozzleGroup = new THREE.Group();
+    const lathe = new THREE.LatheGeometry(profile, 72, 0, cut ? SWEEP : Math.PI * 2);
+    nozzleGroup.add(this._mesh(lathe, graphite));
+    if (cut) {
+      const capShape = new THREE.Shape(profile);
+      const cap0 = new THREE.ShapeGeometry(capShape);
+      cap0.rotateY(-Math.PI / 2); // lathe φ = 0 plane
+      nozzleGroup.add(this._mesh(cap0, graphite));
+      const cap1 = new THREE.ShapeGeometry(capShape);
+      cap1.rotateY(Math.PI); // lathe φ = 270° plane
+      nozzleGroup.add(this._mesh(cap1, graphite));
+    }
+    nozzleGroup.rotation.z = -Math.PI / 2;
+    nozzleGroup.position.x = chamberLen;
+    group.add(nozzleGroup);
 
     group.position.x = -total / 2;
     this.scene.add(group);
     this.group = group;
-    this.setCutaway(this.cutaway);
 
-    this.viewDist = Math.max(total * 1.4, rCase * 7);
+    this.viewDist = Math.max(total * 1.55, rCase * 8);
     this.grid.position.y = -(rCase + 0.004);
     this.grid.scale.setScalar(Math.max(total * 2.5, 0.25));
     if (!this._placed) {
@@ -188,10 +271,6 @@ export class MotorViewer {
 
   setCutaway(on) {
     this.cutaway = on;
-    for (const m of this.materials) {
-      m.clippingPlanes = on ? [this.clipPlane] : [];
-      m.needsUpdate = true;
-    }
+    if (this.lastGeometry) this.rebuild(this.lastGeometry);
   }
-
 }
