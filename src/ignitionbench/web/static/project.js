@@ -500,6 +500,10 @@ function drawSection(g, webMm) {
     "axial section through a slit — colour: burn order, white: front, ─ ─ motor axis",
     W / 2, H - 8,
   );
+  ctx.textAlign = "left";
+  ctx.fillText("fwd face", padX, padT - 6);
+  ctx.textAlign = "right";
+  ctx.fillText("nozzle end", W - padX, padT - 6);
 }
 
 function stopPlayback(label) {

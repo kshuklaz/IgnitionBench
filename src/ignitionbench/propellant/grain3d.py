@@ -1,17 +1,17 @@
 """Face-slit grain geometry via 3D distance-field burn regression.
 
-Real grain slits are saw cuts made into the exposed end faces of a segment:
-they reach ``slit_depth`` outward from the core, run ``slit_length`` into
-the face, and taper to ``slit_taper`` of their mouth size where the cut
-ends — they never pass through the web and never meet in the middle. The
-burning surface is therefore genuinely three-dimensional (the cut narrows
-as the front advances), so the regression is computed on a voxel grid:
+Real grain slits are saw cuts made into the forward (non-nozzle) face of a
+segment: they reach ``slit_depth`` outward from the core, run
+``slit_length`` aft from that face, and taper to ``slit_taper`` of their
+mouth size where the cut ends — they never pass through the web and never
+reach the nozzle-end face. The burning surface is therefore genuinely
+three-dimensional (the cut narrows as the front advances), so the
+regression is computed on a voxel grid:
 
 For uniform normal regression the burn front after web x is exactly the
 set of points at distance x from the initial void surface. A Euclidean
-distance transform over a half-segment voxel grid (the grain is mirror
-symmetric about its mid-plane, so the half grid is exact) gives every
-propellant voxel's distance to the void; remaining volume is
+distance transform over the segment voxel grid gives every propellant
+voxel's distance to the void; remaining volume is
 V(x) = #{voxels: dist > x}·cellvol and burning area is Ab(x) = -dV/dx.
 The ignition surface (x = 0) instead comes from the exact parametric mesh
 shared with the STL exporter and the 3D viewer, so the design tab needs no
@@ -40,20 +40,20 @@ class _Table3D(NamedTuple):
     cell: float  # m
     cell_volume: float  # m³
     max_dist: float  # m
-    # distance field on the (u, z) half plane through slit axis 0,
-    # u radial 0→outer radius, z axial 0→L/2 (mirror for the far half)
+    # distance field on the (u, z) plane through slit axis 0,
+    # u radial 0→outer radius, z axial 0 (slit face) → L (nozzle face)
     section_dist: np.ndarray
 
 
 @dataclass(frozen=True)
 class FaceSlitGrain:
-    """BATES-style segment stack with tapered slits cut into each face.
+    """BATES-style segment stack with tapered slits cut into the forward face.
 
     Each slit is a straight-sided kerf ``slit_width`` across, reaching
-    ``slit_depth`` outward from the core and ``slit_length`` into the face,
-    scaling linearly down to ``slit_taper`` of its mouth size where the cut
-    ends. Both faces of every segment carry the same evenly spaced pattern.
-    All dimensions metres.
+    ``slit_depth`` outward from the core and ``slit_length`` aft from the
+    forward (non-nozzle) face, scaling linearly down to ``slit_taper`` of
+    its mouth size where the cut ends. Every segment carries the same evenly
+    spaced pattern. All dimensions metres.
     """
 
     segment_count: int
@@ -63,7 +63,7 @@ class FaceSlitGrain:
     slit_count: int = 0
     slit_depth: float = 0.0  # radial reach beyond the core
     slit_width: float = 0.0  # kerf width at the face
-    slit_length: float = 0.0  # axial reach into each face
+    slit_length: float = 0.0  # axial reach aft from the forward face
     slit_taper: float = 0.0  # cross-section scale where the cut ends, 0..1
 
     def __post_init__(self) -> None:
@@ -83,11 +83,11 @@ class FaceSlitGrain:
                     f"({radial_web * 1000:.1f} mm) — slits cannot go all the way "
                     "through the web."
                 )
-            if not 0 < self.slit_length <= self.segment_length / 2:
+            if not 0 < self.slit_length < self.segment_length:
                 raise ValueError(
-                    f"slit_length must be positive and at most half the segment "
-                    f"({self.segment_length * 500:.1f} mm) — cuts from opposite "
-                    "faces must not meet in the middle."
+                    f"slit_length must be positive and less than the segment "
+                    f"({self.segment_length * 1000:.1f} mm) — cuts cannot pass "
+                    "through to the nozzle-end face."
                 )
             if self.slit_width <= 0:
                 raise ValueError("slit_width must be positive when slits are present")
@@ -142,7 +142,7 @@ class FaceSlitGrain:
             return self.segment_count * _ignition_area(self)
         if web_burned >= self.web_thickness:
             return 0.0
-        return self.segment_count * 2 * self._area_numeric(web_burned)
+        return self.segment_count * self._area_numeric(web_burned)
 
     def volume(self, web_burned: float = 0.0) -> float:
         if web_burned < 0:
@@ -152,26 +152,20 @@ class FaceSlitGrain:
                 math.pi / 4 * (self.outer_diameter**2 - self.core_diameter**2)
                 * self.segment_length
             )
-            pockets = 2 * self.slit_count * _pocket_volume(self)
+            pockets = self.slit_count * _pocket_volume(self)
             return self.segment_count * (annulus - pockets)
         if web_burned >= self.web_thickness:
             return 0.0
         table = self._table
         idx = np.searchsorted(table.sorted_dists, web_burned, side="right")
-        half = float(table.sorted_dists.size - idx) * table.cell_volume
-        return self.segment_count * 2 * half
+        remaining = float(table.sorted_dists.size - idx) * table.cell_volume
+        return self.segment_count * remaining
 
     def port_area(self, web_burned: float = 0.0) -> float:
-        """Flow channel at the aft face. Slit mouths shrink as the taper burns."""
+        """Flow channel at the aft (nozzle-end) face — a plain core there,
+        since the slits are cut into the forward face only."""
         rc = self.core_diameter / 2 + web_burned
-        port = math.pi * min(rc, self.outer_diameter / 2) ** 2
-        if self.slit_count and self.slit_depth > web_burned:
-            port += self.slit_count * _mouth_area(
-                self.core_diameter / 2,
-                self.slit_width / 2,
-                self.slit_depth,
-            ) * (1 - web_burned / self.slit_depth)
-        return port
+        return math.pi * min(rc, self.outer_diameter / 2) ** 2
 
     def propellant_mass(self, propellant: Propellant, web_burned: float = 0.0) -> float:
         return self.volume(web_burned) * propellant.density
@@ -228,8 +222,9 @@ def _inner_radius(theta: float, rc: float, w2: float, tip_r: float, axes: list[f
 
 
 def _rings(length: float, slit_count: int, slit_length: float, slit_taper: float):
-    """(z, scale) mesh rings from face to face. Duplicate-z pairs mark the
-    flat annular wall where the cut ends."""
+    """(z, scale) mesh rings from the forward face (z = 0, where the slits
+    are cut) to the nozzle-end face. The duplicate-z pair marks the flat
+    annular wall where the cut ends."""
     if slit_count == 0:
         return [(0.0, 0.0), (length, 0.0)]
     rings = []
@@ -237,11 +232,7 @@ def _rings(length: float, slit_count: int, slit_length: float, slit_taper: float
         f = j / _TAPER_RINGS
         rings.append((slit_length * f, 1 - f * (1 - slit_taper)))
     rings.append((slit_length, 0.0))
-    rings.append((length - slit_length, 0.0))
-    rings.append((length - slit_length, slit_taper))
-    for j in range(_TAPER_RINGS - 1, -1, -1):
-        f = j / _TAPER_RINGS
-        rings.append((length - slit_length * f, 1 - f * (1 - slit_taper)))
+    rings.append((length, 0.0))
     return rings
 
 
@@ -303,14 +294,11 @@ def segment_mesh(
             z0, z1 = rings[j][0], rings[j + 1][0]
             if z1 > z0:  # wall band, normal toward the axis
                 quad(burning, pt(j, i), pt(j + 1, i), pt(j + 1, i + 1), pt(j, i + 1))
-            else:  # flat annulus where the cut ends
+            else:  # flat annulus where the cut ends: void below, normal -z
                 lo, hi = (j + 1, j) if r_in[j, i] >= r_in[j + 1, i] else (j, j + 1)
                 if r_in[hi, i] - r_in[lo, i] < 1e-12 and r_in[hi, i + 1] - r_in[lo, i + 1] < 1e-12:
                     continue
-                if j < len(rings) / 2:  # near-face cut: void below, normal -z
-                    quad(burning, pt(lo, i), pt(lo, i + 1), pt(hi, i + 1), pt(hi, i))
-                else:
-                    quad(burning, pt(lo, i), pt(hi, i), pt(hi, i + 1), pt(lo, i + 1))
+                quad(burning, pt(lo, i), pt(lo, i + 1), pt(hi, i + 1), pt(hi, i))
         # end faces, annulus from the void boundary to the outer wall
         j0, j1 = 0, len(rings) - 1
         quad(
@@ -364,18 +352,18 @@ def _ignition_area(grain: FaceSlitGrain) -> float:
 def _build_table(grain: FaceSlitGrain) -> _Table3D:
     R = grain.outer_diameter / 2
     rc = grain.core_diameter / 2
-    half = grain.segment_length / 2
+    length = grain.segment_length
 
-    cell = (grain.outer_diameter**2 * half / _MAX_VOXELS) ** (1 / 3)
+    cell = (grain.outer_diameter**2 * length / _MAX_VOXELS) ** (1 / 3)
     cell = max(cell, grain.outer_diameter / 420)
     nxy = max(int(round(grain.outer_diameter / cell)), 32)
     cell = grain.outer_diameter / nxy
-    nz = max(int(math.ceil(half / cell)), 8)
+    nz = max(int(math.ceil(length / cell)), 8)
 
     axis = np.linspace(-R + cell / 2, R - cell / 2, nxy)
     xs, ys = np.meshgrid(axis, axis, indexing="ij")
     rr = np.hypot(xs, ys)
-    zc = (np.arange(nz) + 0.5) * cell  # voxel centres, face at z = 0
+    zc = (np.arange(nz) + 0.5) * cell  # voxel centres, forward face at z = 0
 
     void = np.broadcast_to((rr <= rc)[:, :, None], (nxy, nxy, nz)).copy()
     if grain.slit_count:
@@ -396,14 +384,12 @@ def _build_table(grain: FaceSlitGrain) -> _Table3D:
                 & (np.abs(v)[:, :, None] <= w2[None, None, :])
             )
 
-    # chamber void beyond the face; nothing beyond the mid-plane (mirror
-    # symmetry makes the plain cut boundary exact)
-    full = np.concatenate(
-        [np.ones((nxy, nxy, _PAD), dtype=bool), void], axis=2
-    )
+    # chamber void beyond both faces
+    pad = np.ones((nxy, nxy, _PAD), dtype=bool)
+    full = np.concatenate([pad, void, pad], axis=2)
     # surface sits about half a voxel closer than the nearest void centre
     dist = (ndimage.distance_transform_edt(~full) - 0.5) * cell
-    dist = np.maximum(dist[:, :, _PAD:], 0.0)
+    dist = np.maximum(dist[:, :, _PAD:-_PAD], 0.0)
 
     inside = (~void) & (rr <= R)[:, :, None]
     dists = np.sort(dist[inside].ravel())
@@ -424,10 +410,10 @@ def _build_table(grain: FaceSlitGrain) -> _Table3D:
 
 def regression_section(grain: FaceSlitGrain, max_u: int = 96, max_z: int = 150) -> dict:
     """Downsampled (u, z) distance field through a slit axis for the UI:
-    u radial from the motor axis, z the full segment length (mirrored)."""
+    u radial from the motor axis, z from the forward (slit) face to the
+    nozzle-end face."""
     table = grain._table
-    half = table.section_dist  # (nu, nz_half)
-    full = np.concatenate([half, half[:, ::-1]], axis=1)
+    full = table.section_dist  # (nu, nz)
     su = max(1, math.ceil(full.shape[0] / max_u))
     sz = max(1, math.ceil(full.shape[1] / max_z))
     ds = full[::su, ::sz]

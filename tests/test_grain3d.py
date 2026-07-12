@@ -26,13 +26,13 @@ def test_plain_grain_matches_analytic_bates():
 
 
 def test_slits_add_ignition_surface_then_burn_out():
-    assert SLIT.burning_area(0) > PLAIN.burning_area(0) * 1.1
+    assert SLIT.burning_area(0) > PLAIN.burning_area(0) * 1.05
     # by the time the front has passed the slit depth the cuts are consumed
     # and the areas converge
     late = SLIT.burning_area(0.012) / PLAIN.burning_area(0.012)
     assert late < 1.03
     # pockets remove only a sliver of propellant
-    assert SLIT.volume(0) / PLAIN.volume(0) > 0.98
+    assert SLIT.volume(0) / PLAIN.volume(0) > 0.99
 
 
 def test_longer_and_wider_cuts_add_more_surface():
@@ -54,10 +54,10 @@ def test_validation():
             3, 0.054, 0.020, 0.095,
             slit_count=3, slit_depth=0.017, slit_width=0.003, slit_length=0.030,
         )
-    with pytest.raises(ValueError, match="opposite faces"):
+    with pytest.raises(ValueError, match="nozzle-end face"):
         FaceSlitGrain(
             3, 0.054, 0.020, 0.095,
-            slit_count=3, slit_depth=0.008, slit_width=0.003, slit_length=0.050,
+            slit_count=3, slit_depth=0.008, slit_width=0.003, slit_length=0.095,
         )
     with pytest.raises(ValueError, match="overlap"):
         FaceSlitGrain(
@@ -71,7 +71,7 @@ def test_simulation_runs_to_burnout():
     plain = simulate_burn(KNSB, PLAIN, throat_area)
     slit = simulate_burn(KNSB, SLIT, throat_area)
     # slits raise ignition Kn and pressure, cost a little total impulse
-    assert slit.kn[0] > plain.kn[0] * 1.1
+    assert slit.kn[0] > plain.kn[0] * 1.05
     assert slit.pressure[0] > plain.pressure[0]
     assert slit.total_impulse == pytest.approx(plain.total_impulse, rel=0.05)
     assert slit.thrust[-1] == 0.0

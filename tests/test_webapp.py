@@ -106,7 +106,7 @@ def test_design_and_simulate_with_slit_grain(client):
     }
     plain = client.post("/api/design", json=DESIGN).get_json()
     d = client.post("/api/design", json=slotted).get_json()
-    assert d["kn"] > 1.1 * plain["kn"]  # face slits add burning surface
+    assert d["kn"] > 1.05 * plain["kn"]  # face slits add burning surface
     assert d["geometry"]["slit_count"] == 3
     assert d["geometry"]["slit_length_mm"] == pytest.approx(30)
 

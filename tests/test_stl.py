@@ -46,16 +46,16 @@ def test_slotted_stl_carves_tapered_face_slits():
         r = math.hypot(x, y)
         if r < 26.9:  # inner boundary only
             by_z.setdefault(round(z, 3), []).append(r)
-    # at the faces the slit reaches core + depth = 18 mm
+    # at the forward face the slit reaches core + depth = 18 mm; the
+    # nozzle-end face is a plain annulus from the core
     assert max(by_z[0.0]) == pytest.approx(18.0, abs=0.3)
-    assert max(by_z[95.0]) == pytest.approx(18.0, abs=0.3)
+    assert max(by_z[95.0]) == pytest.approx(10.0, abs=0.1)
     # where the cut ends it has tapered to 30%: core + 0.3·depth = 12.4 mm
     at_end = max(r for z, rs in by_z.items() if abs(z - 30.0) < 0.01 for r in rs)
     assert at_end == pytest.approx(10 + 8 * 0.3, abs=0.3)
-    # no slit-wall vertex (r beyond the core) lies in the middle of the
-    # segment — the cuts stop at 30 mm from each face
+    # no slit-wall vertex (r beyond the core) lies past the cut length
     assert all(
-        z <= 30.01 or z >= 64.99
+        z <= 30.01
         for z, rs in by_z.items()
         for r in rs
         if r > 10.2
@@ -72,8 +72,8 @@ def test_rejects_bad_geometry():
             0.054, 0.020, 0.095,
             slit_count=3, slit_depth=0.017, slit_width=0.003, slit_length=0.030,
         )
-    with pytest.raises(ValueError, match="opposite faces"):
+    with pytest.raises(ValueError, match="nozzle-end face"):
         grain_segment_stl(
             0.054, 0.020, 0.095,
-            slit_count=3, slit_depth=0.008, slit_width=0.003, slit_length=0.060,
+            slit_count=3, slit_depth=0.008, slit_width=0.003, slit_length=0.095,
         )

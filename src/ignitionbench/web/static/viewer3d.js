@@ -34,22 +34,20 @@ function innerRadiusAt(g, theta, scale) {
   return best;
 }
 
-// (z, scale) mesh rings from face to face; duplicate-z pairs mark the flat
-// wall where the cut ends.
+// (z, scale) mesh rings from the forward face (z = 0, where the slits are
+// cut) to the nozzle-end face; the duplicate-z pair marks the flat wall
+// where the cut ends.
 function ringList(g) {
   const L = g.length_mm;
   if (!g.slit_count) return [[0, 0], [L, 0]];
-  const Lc = Math.min(g.slit_length_mm || L / 3, L / 2);
+  const Lc = Math.min(g.slit_length_mm || L / 3, L * 0.99);
   const taper = g.slit_taper ?? 0;
   const steps = 12;
   const rings = [];
   for (let j = 0; j <= steps; j++) {
     rings.push([(Lc * j) / steps, 1 - (j / steps) * (1 - taper)]);
   }
-  rings.push([Lc, 0], [L - Lc, 0], [L - Lc, taper]);
-  for (let j = steps - 1; j >= 0; j--) {
-    rings.push([L - (Lc * j) / steps, 1 - (j / steps) * (1 - taper)]);
-  }
+  rings.push([Lc, 0], [L, 0]);
   return rings;
 }
 

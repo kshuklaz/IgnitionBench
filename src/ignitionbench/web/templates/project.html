@@ -94,14 +94,15 @@
           <label>Slits <input id="slit_count" type="number" min="0" max="8" step="1"></label>
           <label>Depth <span class="unit">mm radial</span> <input id="slit_depth_mm" type="number" min="0.5" step="0.5"></label>
           <label>Width <span class="unit">mm</span> <input id="slit_width_mm" type="number" min="0.5" step="0.5"></label>
-          <label>Cut length <span class="unit">mm into face</span> <input id="slit_length_mm" type="number" min="1" step="1"></label>
+          <label>Cut length <span class="unit">mm from fwd face</span> <input id="slit_length_mm" type="number" min="1" step="1"></label>
           <label>Taper <span class="unit">% at end</span> <input id="slit_taper_pct" type="number" min="0" max="100" step="5"></label>
         </div>
-        <p class="footnote">Slits are cuts into each grain face: they reach
-        Depth outward from the core, run Cut length into the face, and taper
-        down to the given share of their mouth size where the cut ends — never
-        through the web, never meeting in the middle. They boost initial
-        burning surface, then burn out as the front advances.</p>
+        <p class="footnote">Slits are cuts into the forward (non-nozzle) face
+        of each segment: they reach Depth outward from the core, run Cut
+        length aft from that face, and taper down to the given share of their
+        mouth size where the cut ends — never through the web, never through
+        to the nozzle end. They boost initial burning surface, then burn out
+        as the front advances.</p>
 
         <h3>Nozzle</h3>
         <div class="field-grid">
