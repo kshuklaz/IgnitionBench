@@ -19,6 +19,7 @@ from .database import (
 )
 from .grain import BatesGrain
 from .grain2d import SlottedGrain
+from .grain3d import FaceSlitGrain, regression_section, segment_mesh
 
 __all__ = [
     "BLUE_THUNDER",
@@ -32,8 +33,11 @@ __all__ = [
     "WHITE_LIGHTNING",
     "BatesGrain",
     "BurnRateSegment",
+    "FaceSlitGrain",
     "Propellant",
     "SlottedGrain",
+    "regression_section",
+    "segment_mesh",
     "kn",
     "kn_for_pressure",
     "port_to_throat",

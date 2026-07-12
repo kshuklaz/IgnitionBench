@@ -21,10 +21,11 @@ from ignitionbench.propellant import (
     PROPELLANTS,
     BatesGrain,
     BurnRateSegment,
+    FaceSlitGrain,
     Propellant,
-    SlottedGrain,
     kn,
     port_to_throat,
+    regression_section,
     steady_state_pressure,
 )
 from ignitionbench.simulation import certification, motor_class, simulate_burn
@@ -79,14 +80,16 @@ def _parse_design(data: dict) -> tuple[Propellant, BatesGrain, float, float]:
     try:
         slit_count = int(g.get("slit_count") or 0)
         if slit_count > 0:
-            grain = SlottedGrain(
+            length_mm = float(g["length_mm"])
+            grain = FaceSlitGrain(
                 int(g["segments"]),
                 float(g["outer_d_mm"]) / 1000,
                 float(g["core_d_mm"]) / 1000,
-                float(g["length_mm"]) / 1000,
+                length_mm / 1000,
                 slit_count=slit_count,
                 slit_depth=float(g["slit_depth_mm"]) / 1000,
                 slit_width=float(g["slit_width_mm"]) / 1000,
+                slit_length=float(g.get("slit_length_mm") or length_mm / 3) / 1000,
                 slit_taper=float(g.get("slit_taper_pct") or 0) / 100,
             )
         else:
@@ -168,6 +171,7 @@ def _design_result(prop: Propellant, grain: BatesGrain, throat_area: float, half
             "slit_count": getattr(grain, "slit_count", 0),
             "slit_depth_mm": getattr(grain, "slit_depth", 0.0) * 1000,
             "slit_width_mm": getattr(grain, "slit_width", 0.0) * 1000,
+            "slit_length_mm": getattr(grain, "slit_length", 0.0) * 1000,
             "slit_taper": getattr(grain, "slit_taper", 0.0),
             "throat_d_mm": throat_d * 1000,
             "exit_d_mm": nozzle.exit_diameter * 1000,
@@ -274,6 +278,10 @@ def create_app() -> Flask:
         payload = dataclasses.asdict(result)
         payload["certification"] = certification(result.motor_class)
         payload["initial_mass_g"] = grain.propellant_mass(prop) * 1000
+        # distance field through a slit axis for the regression view
+        payload["slit_section"] = (
+            regression_section(grain) if isinstance(grain, FaceSlitGrain) else None
+        )
         return jsonify(payload)
 
     @app.get("/api/stl")
@@ -286,6 +294,7 @@ def create_app() -> Flask:
                 slit_count=int(request.args.get("slit_count") or 0),
                 slit_depth=float(request.args.get("slit_depth_mm") or 0) / 1000,
                 slit_width=float(request.args.get("slit_width_mm") or 0) / 1000,
+                slit_length=float(request.args.get("slit_length_mm") or 0) / 1000,
                 slit_taper=float(request.args.get("slit_taper_pct") or 0) / 100,
             )
         except (KeyError, TypeError, ValueError) as exc:

@@ -14,44 +14,111 @@ const WALL = 3, BULKHEAD = 10, FWD = 6, AFT = 5, GAP = 3; // mm, visual construc
 const SWEEP_START = Math.PI; // kept sector 180°→450°: the +y/+z quadrant is removed
 const SWEEP = Math.PI * 1.5;
 
-// Distance from the axis to the void boundary along the ray at theta (mm).
-// Mirrors the exact wedge math used by the STL exporter.
-function innerRadiusAt(g, theta) {
+// Distance from the axis to the void boundary along the ray at theta (mm),
+// for the cross-section at kerf scale s (1 at the face, slit_taper where the
+// cut ends, 0 past it). Mirrors grain3d.segment_mesh exactly.
+function innerRadiusAt(g, theta, scale) {
   const rc = g.core_d_mm / 2;
-  if (!g.slit_count) return rc;
-  const mouthHalf = g.slit_width_mm / 2;
-  const tipHalf = mouthHalf * (g.slit_taper ?? 0);
-  const narrowing = (mouthHalf - tipHalf) / g.slit_depth_mm;
+  const w2 = (g.slit_width_mm / 2) * scale;
+  if (!g.slit_count || w2 <= 0) return rc;
+  const tip = rc + g.slit_depth_mm * scale;
   let best = rc;
   for (let k = 0; k < g.slit_count; k++) {
     const axis = (2 * Math.PI * k) / g.slit_count - Math.PI / 2;
     const delta = Math.atan2(Math.sin(theta - axis), Math.cos(theta - axis));
-    const cosD = Math.cos(delta), sinD = Math.abs(Math.sin(delta));
-    if (cosD <= 0) continue;
-    const denom = sinD + narrowing * cosD;
-    if (denom > 0) {
-      const rWall = (mouthHalf + narrowing * rc) / denom;
-      const depthAt = rWall * cosD - rc;
-      if (depthAt >= 0 && depthAt <= g.slit_depth_mm) {
-        best = Math.max(best, rWall);
-        continue;
-      }
-    }
-    const rTip = (rc + g.slit_depth_mm) / cosD;
-    if (rTip * sinD <= tipHalf) best = Math.max(best, rTip);
+    const c = Math.cos(delta), s = Math.abs(Math.sin(delta));
+    if (c <= 0) continue;
+    if (tip * s <= w2) best = Math.max(best, tip / c); // exits the flat end wall
+    else if (w2 / s > rc) best = Math.max(best, w2 / s); // exits a side wall
   }
   return best;
 }
 
-// Full-circle void outline (mm) for the uncut grain's extrude hole.
-function voidOutline(g) {
-  const points = [];
-  for (let i = 0; i < 360; i++) {
-    const a = (2 * Math.PI * i) / 360;
-    const r = innerRadiusAt(g, a);
-    points.push([r * Math.cos(a), r * Math.sin(a)]);
+// (z, scale) mesh rings from face to face; duplicate-z pairs mark the flat
+// wall where the cut ends.
+function ringList(g) {
+  const L = g.length_mm;
+  if (!g.slit_count) return [[0, 0], [L, 0]];
+  const Lc = Math.min(g.slit_length_mm || L / 3, L / 2);
+  const taper = g.slit_taper ?? 0;
+  const steps = 12;
+  const rings = [];
+  for (let j = 0; j <= steps; j++) {
+    rings.push([(Lc * j) / steps, 1 - (j / steps) * (1 - taper)]);
   }
-  return points;
+  rings.push([Lc, 0], [L - Lc, 0], [L - Lc, taper]);
+  for (let j = steps - 1; j >= 0; j--) {
+    rings.push([L - (Lc * j) / steps, 1 - (j / steps) * (1 - taper)]);
+  }
+  return rings;
+}
+
+// Grain segment as a triangle soup (mm): inner surface with tapered slit
+// pockets, end faces, outer wall, and — when cut — capped section profiles.
+function grainGeometry(g, rOuter, cut) {
+  const rings = ringList(g);
+  const a0 = cut ? SWEEP_START : 0;
+  const span = cut ? SWEEP : Math.PI * 2;
+  const M = cut ? 216 : 256;
+  const rIn = rings.map(([, s]) => {
+    const row = new Float64Array(M + 1);
+    for (let i = 0; i <= M; i++) row[i] = innerRadiusAt(g, a0 + (span * i) / M, s);
+    return row;
+  });
+  const cos = new Float64Array(M + 1), sin = new Float64Array(M + 1);
+  for (let i = 0; i <= M; i++) {
+    cos[i] = Math.cos(a0 + (span * i) / M);
+    sin[i] = Math.sin(a0 + (span * i) / M);
+  }
+
+  const pos = [];
+  const tri = (a, b, c) => pos.push(...a, ...b, ...c);
+  const quad = (a, b, c, d) => { tri(a, b, c); tri(a, c, d); };
+  const P = (j, i) => [rIn[j][i] * cos[i], rIn[j][i] * sin[i], rings[j][0]];
+  const O = (i, z) => [rOuter * cos[i], rOuter * sin[i], z];
+  const L = g.length_mm;
+
+  for (let i = 0; i < M; i++) {
+    for (let j = 0; j < rings.length - 1; j++) {
+      if (rings[j + 1][0] > rings[j][0]) {
+        quad(P(j, i), P(j + 1, i), P(j + 1, i + 1), P(j, i + 1)); // wall band
+      } else if (
+        Math.abs(rIn[j][i] - rIn[j + 1][i]) > 1e-9 ||
+        Math.abs(rIn[j][i + 1] - rIn[j + 1][i + 1]) > 1e-9
+      ) {
+        quad(P(j, i), P(j, i + 1), P(j + 1, i + 1), P(j + 1, i)); // cut-end wall
+      }
+    }
+    const jl = rings.length - 1;
+    quad(P(0, i), P(0, i + 1), O(i + 1, 0), O(i, 0)); // near face
+    quad(P(jl, i), O(i, L), O(i + 1, L), P(jl, i + 1)); // far face
+    quad(O(i, 0), O(i + 1, 0), O(i + 1, L), O(i, L)); // outer wall
+  }
+
+  if (cut) {
+    // capped section profile at each cut plane: outer wall down the length,
+    // then the inner boundary walked back with its slit steps
+    for (const phi of [a0, a0 + span]) {
+      const pts = [new THREE.Vector2(rOuter, 0), new THREE.Vector2(rOuter, L)];
+      for (let j = rings.length - 1; j >= 0; j--) {
+        pts.push(new THREE.Vector2(innerRadiusAt(g, phi, rings[j][1]), rings[j][0]));
+      }
+      const faces = THREE.ShapeUtils.triangulateShape(pts, []);
+      const c = Math.cos(phi), s = Math.sin(phi);
+      for (const [ia, ib, ic] of faces) {
+        tri(
+          [pts[ia].x * c, pts[ia].x * s, pts[ia].y],
+          [pts[ib].x * c, pts[ib].x * s, pts[ib].y],
+          [pts[ic].x * c, pts[ic].x * s, pts[ic].y],
+        );
+      }
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geom.computeVertexNormals();
+  return geom;
 }
 
 function ringSectorShape(rIn, rOut, cut) {
@@ -79,30 +146,6 @@ function discSectorShape(r, cut) {
   }
   shape.moveTo(0, 0);
   shape.absarc(0, 0, r, SWEEP_START, SWEEP_START + SWEEP, false);
-  shape.closePath();
-  return shape;
-}
-
-// Grain cross-section (mm): outer arc, then the void boundary walked back,
-// so slits appear as notches in the cut faces.
-function grainShape(g, rOuter, cut) {
-  if (!cut) {
-    const shape = new THREE.Shape();
-    shape.absarc(0, 0, rOuter, 0, Math.PI * 2, false);
-    const hole = new THREE.Path();
-    hole.setFromPoints(voidOutline(g).map(([x, y]) => new THREE.Vector2(x, y)));
-    shape.holes.push(hole);
-    return shape;
-  }
-  const a0 = SWEEP_START, a1 = SWEEP_START + SWEEP;
-  const shape = new THREE.Shape();
-  shape.absarc(0, 0, rOuter, a0, a1, false);
-  const samples = 270;
-  for (let i = 0; i <= samples; i++) {
-    const a = a1 - (SWEEP * i) / samples;
-    const r = innerRadiusAt(g, a);
-    shape.lineTo(r * Math.cos(a), r * Math.sin(a));
-  }
   shape.closePath();
   return shape;
 }
@@ -214,13 +257,13 @@ export class MotorViewer {
     capGeom.rotateY(Math.PI / 2);
     group.add(this._mesh(capGeom, steel));
 
-    // grain segments
-    const grainGeom = new THREE.ExtrudeGeometry(
-      grainShape(g, (g.outer_d_mm / 2) * 0.998, cut), extrudeOpts(g.length_mm));
+    // grain segments: parametric surface with the tapered face-slit pockets
+    // (triangle soup — skip the edge overlay, it would outline every facet)
+    const grainGeom = grainGeometry(g, (g.outer_d_mm / 2) * 0.998, cut);
     grainGeom.scale(MM, MM, MM);
     grainGeom.rotateY(Math.PI / 2);
     for (let i = 0; i < g.segments; i++) {
-      const seg = this._mesh(grainGeom.clone(), fuel);
+      const seg = new THREE.Mesh(grainGeom.clone(), fuel);
       seg.position.x = (BULKHEAD + FWD) * MM + i * (segLen + GAP * MM);
       group.add(seg);
     }

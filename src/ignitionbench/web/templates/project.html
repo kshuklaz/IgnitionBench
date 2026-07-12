@@ -89,16 +89,19 @@
           <label>Core Ø <span class="unit">mm</span> <input id="core_d_mm" type="number" min="1" step="0.5"></label>
           <label>Length <span class="unit">mm</span> <input id="length_mm" type="number" min="1" step="1"></label>
         </div>
-        <h3>Grain slits</h3>
+        <h3>Face slits</h3>
         <div class="field-grid">
           <label>Slits <input id="slit_count" type="number" min="0" max="8" step="1"></label>
-          <label>Depth <span class="unit">mm</span> <input id="slit_depth_mm" type="number" min="0.5" step="0.5"></label>
+          <label>Depth <span class="unit">mm radial</span> <input id="slit_depth_mm" type="number" min="0.5" step="0.5"></label>
           <label>Width <span class="unit">mm</span> <input id="slit_width_mm" type="number" min="0.5" step="0.5"></label>
-          <label>Taper <span class="unit">% tip</span> <input id="slit_taper_pct" type="number" min="0" max="100" step="5"></label>
+          <label>Cut length <span class="unit">mm into face</span> <input id="slit_length_mm" type="number" min="1" step="1"></label>
+          <label>Taper <span class="unit">% at end</span> <input id="slit_taper_pct" type="number" min="0" max="100" step="5"></label>
         </div>
-        <p class="footnote">Radial slits cut from the core partway into the web —
-        they raise initial burning surface, then round out as the burn front
-        consumes them. Taper is the tip width as a share of the mouth width.</p>
+        <p class="footnote">Slits are cuts into each grain face: they reach
+        Depth outward from the core, run Cut length into the face, and taper
+        down to the given share of their mouth size where the cut ends — never
+        through the web, never meeting in the middle. They boost initial
+        burning surface, then burn out as the front advances.</p>
 
         <h3>Nozzle</h3>
         <div class="field-grid">
@@ -181,7 +184,8 @@
       <input type="range" id="scrubber" min="0" max="240" value="0" step="1">
       <div class="anim-views">
         <svg id="faceView" viewBox="0 0 220 220" role="img" aria-label="Grain face view"></svg>
-        <svg id="sideView" viewBox="0 0 560 220" role="img" aria-label="Motor side cross-section"></svg>
+        <canvas id="sectionView" width="560" height="220" role="img"
+                aria-label="Axial section of one segment: web remaining as a colour map"></canvas>
       </div>
       <div class="anim-readout" id="animReadout"></div>
     </div>

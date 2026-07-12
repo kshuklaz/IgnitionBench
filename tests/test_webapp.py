@@ -92,7 +92,7 @@ def test_design_endpoint_flags_overpressure(client):
     assert "overpressure" in res.get_json()["error"]
 
 
-def test_design_and_simulate_with_slotted_grain(client):
+def test_design_and_simulate_with_slit_grain(client):
     slotted = {
         **DESIGN,
         "grain": {
@@ -100,17 +100,22 @@ def test_design_and_simulate_with_slotted_grain(client):
             "slit_count": 3,
             "slit_depth_mm": 8,
             "slit_width_mm": 3,
+            "slit_length_mm": 30,
             "slit_taper_pct": 30,
         },
     }
     plain = client.post("/api/design", json=DESIGN).get_json()
     d = client.post("/api/design", json=slotted).get_json()
-    assert d["kn"] > 1.2 * plain["kn"]  # slits add burning surface
+    assert d["kn"] > 1.1 * plain["kn"]  # face slits add burning surface
     assert d["geometry"]["slit_count"] == 3
+    assert d["geometry"]["slit_length_mm"] == pytest.approx(30)
 
     sim = client.post("/api/simulate", json=slotted)
     assert sim.status_code == 200
-    assert sim.get_json()["thrust"][-1] == 0.0
+    body = sim.get_json()
+    assert body["thrust"][-1] == 0.0
+    sec = body["slit_section"]
+    assert sec["nu"] * sec["nz"] == len(sec["dist_mm"])
 
     too_deep = {**slotted, "grain": {**slotted["grain"], "slit_depth_mm": 17}}
     res = client.post("/api/design", json=too_deep)
@@ -126,6 +131,10 @@ def test_simulate_endpoint(client):
     assert d["motor_class"] == "J"
     assert d["certification"]["level"] == "L2"
     assert d["thrust"][-1] == 0.0
+
+
+def test_simulate_without_slits_has_no_section(client):
+    assert client.post("/api/simulate", json=DESIGN).get_json()["slit_section"] is None
 
 
 def test_stl_endpoint(client):

@@ -48,6 +48,7 @@ def _default_project(name: str) -> dict:
             "slit_count": 0,
             "slit_depth_mm": 8,
             "slit_width_mm": 3,
+            "slit_length_mm": 30,
             "slit_taper_pct": 30,
         },
         "nozzle": {"throat_d_mm": 15, "half_angle_deg": 15},

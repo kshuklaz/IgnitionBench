@@ -457,7 +457,8 @@ input[type="range"] {
   gap: 20px;
   align-items: center;
 }
-.anim-views svg { width: 100%; height: auto; display: block; }
+.anim-views svg,
+.anim-views canvas { width: 100%; height: auto; display: block; border-radius: 8px; }
 
 .anim-readout {
   display: flex;

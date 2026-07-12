@@ -11,7 +11,7 @@ const debounce = (fn, ms) => {
 
 const GRAIN_IDS = [
   "segments", "outer_d_mm", "core_d_mm", "length_mm",
-  "slit_count", "slit_depth_mm", "slit_width_mm", "slit_taper_pct",
+  "slit_count", "slit_depth_mm", "slit_width_mm", "slit_length_mm", "slit_taper_pct",
 ];
 const NOZZLE_IDS = ["throat_d_mm", "half_angle_deg"];
 const CUSTOM_IDS = ["name", "a_mm_mpa", "n", "density", "gamma", "temp_k", "molar_g", "min_mpa", "max_mpa"];
@@ -354,7 +354,7 @@ function setFrame(i) {
   $("scrubber").value = i;
   $("animTime").textContent = `t = ${fmt(sim.time[i], 2)} s`;
   drawFace(g, webMm);
-  drawSide(g, webMm);
+  drawSection(g, webMm);
   $("animReadout").innerHTML =
     `Kn <b>${fmt(sim.kn[i], 0)}</b> · ` +
     `Pc <b>${fmt(sim.pressure[i] / 6895, 0)} psi</b> · ` +
@@ -365,22 +365,22 @@ function setFrame(i) {
   charts.pressure?.setCursor(sim.time[i]);
 }
 
-// Wedge outline of slit k in mm coordinates centred on the motor axis.
-// Starts slightly inside the core so the polygon fuses with the core circle.
+// Straight-sided kerf outline of slit k at the face, in mm coordinates
+// centred on the motor axis. Starts slightly inside the core so the polygon
+// fuses with the core circle.
 function slitPolygon(g, k) {
   const rc = g.core_d_mm / 2;
   const tip = rc + g.slit_depth_mm;
-  const mouthHalf = g.slit_width_mm / 2;
-  const tipHalf = mouthHalf * ((g.slit_taper_pct ?? 0) / 100);
+  const half = g.slit_width_mm / 2;
   const th = (2 * Math.PI * k) / g.slit_count - Math.PI / 2;
   const ux = Math.cos(th), uy = Math.sin(th);
   const vx = -uy, vy = ux;
   const r0 = rc * 0.9;
   return [
-    [r0 * ux - mouthHalf * vx, r0 * uy - mouthHalf * vy],
-    [tip * ux - tipHalf * vx, tip * uy - tipHalf * vy],
-    [tip * ux + tipHalf * vx, tip * uy + tipHalf * vy],
-    [r0 * ux + mouthHalf * vx, r0 * uy + mouthHalf * vy],
+    [r0 * ux - half * vx, r0 * uy - half * vy],
+    [tip * ux - half * vx, tip * uy - half * vy],
+    [tip * ux + half * vx, tip * uy + half * vy],
+    [r0 * ux + half * vx, r0 * uy + half * vy],
   ];
 }
 
@@ -418,35 +418,88 @@ function drawFace(g, webMm) {
     <text x="${c}" y="${S - 3}" fill="#8f8e84" font-size="10" text-anchor="middle">face view</text>`;
 }
 
-function drawSide(g, webMm) {
-  const W = 560, H = 220, pad = 26, cy = H / 2;
-  const gap = 3, bulk = 10, fwd = 6;
-  const grainLen = g.segments * g.length_mm + (g.segments - 1) * gap;
-  const chamberLen = bulk + fwd + grainLen + 5;
-  const maxDia = g.outer_d_mm + 12;
-  const s = Math.min((W - 2 * pad) / chamberLen, (H - 2 * pad) / maxDia);
-  const x0 = (W - chamberLen * s) / 2;
-  const grainR = (g.outer_d_mm / 2) * s;
-  const caseR = grainR + 3 * s;
-  const coreR = Math.min(g.core_d_mm / 2 + webMm, g.outer_d_mm / 2) * s;
-  const lenNow = Math.max(g.length_mm - 2 * webMm, 0);
-
-  const el = [];
-  el.push(`<line x1="${x0 - 10}" y1="${cy}" x2="${x0 + chamberLen * s + 10}" y2="${cy}" stroke="#3a3937" stroke-dasharray="6 5"/>`);
-  el.push(`<rect x="${x0}" y="${cy - caseR}" width="${chamberLen * s}" height="${2 * caseR}" rx="4" fill="#201f1e" stroke="#55534d" stroke-width="1.5"/>`);
-  for (let i = 0; i < g.segments; i++) {
-    const cxSeg = x0 + (bulk + fwd + i * (g.length_mm + gap) + g.length_mm / 2) * s;
-    const gx = cxSeg - (lenNow / 2) * s;
-    const gw = lenNow * s;
-    // original outline
-    el.push(`<rect x="${cxSeg - (g.length_mm / 2) * s}" y="${cy - grainR}" width="${g.length_mm * s}" height="${2 * grainR}" fill="none" stroke="#3a3937" stroke-dasharray="3 4"/>`);
-    if (gw > 0 && grainR > coreR) {
-      el.push(`<rect x="${gx}" y="${cy - grainR}" width="${gw}" height="${grainR - coreR}" fill="rgba(57,135,229,0.25)" stroke="rgba(57,135,229,0.85)"/>`);
-      el.push(`<rect x="${gx}" y="${cy + coreR}" width="${gw}" height="${grainR - coreR}" fill="rgba(57,135,229,0.25)" stroke="rgba(57,135,229,0.85)"/>`);
+// Analytic distance field for a plain BATES segment: nearest of core wall
+// and the two faces. Same payload shape as the server's slit section.
+function batesSection(g) {
+  const R = g.outer_d_mm / 2, rc = g.core_d_mm / 2, L = g.length_mm;
+  const nu = 80, nz = 200;
+  const du = R / nu, dz = L / nz;
+  const dist = new Float64Array(nu * nz);
+  for (let iu = 0; iu < nu; iu++) {
+    const u = (iu + 0.5) * du;
+    for (let iz = 0; iz < nz; iz++) {
+      const z = (iz + 0.5) * dz;
+      dist[iu * nz + iz] = u <= rc ? 0 : Math.min(u - rc, z, L - z);
     }
   }
-  el.push(`<text x="${W / 2}" y="${H - 6}" fill="#8f8e84" font-size="10" text-anchor="middle">side section — dashed = original grain</text>`);
-  $("sideView").innerHTML = el.join("");
+  return {
+    nu, nz, du_mm: du, dz_mm: dz, cell_mm: du,
+    web_mm: Math.min(R - rc, L / 2), dist_mm: dist,
+  };
+}
+
+// One segment in axial section through a slit axis, openMotor style: colour
+// encodes when each point burns, dark = already consumed, white = the front.
+function drawSection(g, webMm) {
+  const cv = $("sectionView");
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, padX = 34, padT = 14, padB = 30;
+  ctx.fillStyle = "#141413";
+  ctx.fillRect(0, 0, W, H);
+
+  const sec = (sim && sim.slit_section) || batesSection(g);
+  const { nu, nz, web_mm } = sec;
+  const front = Math.max(sec.cell_mm * 1.4, web_mm / 90);
+
+  const img = new ImageData(nz, nu);
+  for (let iu = 0; iu < nu; iu++) {
+    const row = (nu - 1 - iu) * nz; // u = 0 (motor axis) at the bottom
+    for (let iz = 0; iz < nz; iz++) {
+      const d = sec.dist_mm[iu * nz + iz];
+      const o = (row + iz) * 4;
+      if (d <= 0) {
+        img.data[o + 3] = 0; // void from the start — panel background
+      } else if (Math.abs(d - webMm) <= front) {
+        img.data[o] = 255; img.data[o + 1] = 255; img.data[o + 2] = 255;
+        img.data[o + 3] = 255;
+      } else if (d < webMm) {
+        img.data[o] = 34; img.data[o + 1] = 31; img.data[o + 2] = 28;
+        img.data[o + 3] = 255; // burned
+      } else {
+        const t = Math.min(d / web_mm, 1); // late-burning = darker blue
+        img.data[o] = Math.round(127 - 97 * t);
+        img.data[o + 1] = Math.round(181 - 123 * t);
+        img.data[o + 2] = Math.round(240 - 148 * t);
+        img.data[o + 3] = 255;
+      }
+    }
+  }
+
+  const off = new OffscreenCanvas(nz, nu);
+  off.getContext("2d").putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(off, padX, padT, W - 2 * padX, H - padT - padB);
+
+  // motor axis under the section, casing wall above it
+  ctx.strokeStyle = "#55534d";
+  ctx.setLineDash([7, 5]);
+  ctx.beginPath();
+  ctx.moveTo(padX - 12, H - padB);
+  ctx.lineTo(W - padX + 12, H - padB);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = "#6f6d66";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(padX, padT - 2, W - 2 * padX, 2);
+  ctx.lineWidth = 1;
+
+  ctx.fillStyle = "#8f8e84";
+  ctx.font = "10px ui-monospace, Menlo, monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "axial section through a slit — colour: burn order, white: front, ─ ─ motor axis",
+    W / 2, H - 8,
+  );
 }
 
 function stopPlayback(label) {
@@ -535,7 +588,8 @@ $("stlBtn").addEventListener("click", () => {
   const params = new URLSearchParams({
     outer_d_mm: g.outer_d_mm, core_d_mm: g.core_d_mm, length_mm: g.length_mm,
     slit_count: g.slit_count || 0, slit_depth_mm: g.slit_depth_mm,
-    slit_width_mm: g.slit_width_mm, slit_taper_pct: g.slit_taper_pct,
+    slit_width_mm: g.slit_width_mm, slit_length_mm: g.slit_length_mm,
+    slit_taper_pct: g.slit_taper_pct,
   });
   location.href = `/api/stl?${params}`;
 });
@@ -551,9 +605,13 @@ async function boot() {
   library = await libRes.json();
   // projects saved before slits existed get the defaults
   project.grain = {
-    slit_count: 0, slit_depth_mm: 8, slit_width_mm: 3, slit_taper_pct: 30,
+    slit_count: 0, slit_depth_mm: 8, slit_width_mm: 3, slit_length_mm: 30,
+    slit_taper_pct: 30,
     ...project.grain,
   };
+  if (!project.grain.slit_length_mm) {
+    project.grain.slit_length_mm = Math.round(project.grain.length_mm / 3);
+  }
 
   const select = $("propellant");
   for (const [key, p] of Object.entries(library)) {
