@@ -59,7 +59,11 @@ export class MotorViewer {
     this.materials = [];
     this.group = null;
     this.cutaway = true;
-    this.homeCamera = new THREE.Vector3(0.28, 0.16, 0.34);
+    this.viewDist = 0.45;
+
+    // CAD-style reference grid under the part
+    this.grid = new THREE.GridHelper(1, 40, 0x33322f, 0x232221);
+    this.scene.add(this.grid);
 
     this._resize();
     new ResizeObserver(() => this._resize()).observe(canvas.parentElement);
@@ -160,12 +164,26 @@ export class MotorViewer {
     this.group = group;
     this.setCutaway(this.cutaway);
 
-    const dist = Math.max(total * 1.6, rCase * 8);
-    this.homeCamera = new THREE.Vector3(dist * 0.75, dist * 0.45, dist * 0.9);
+    this.viewDist = Math.max(total * 1.4, rCase * 7);
+    this.grid.position.y = -(rCase + 0.004);
+    this.grid.scale.setScalar(Math.max(total * 2.5, 0.25));
     if (!this._placed) {
-      this.resetView();
+      this.setView("iso");
       this._placed = true;
     }
+  }
+
+  setView(name) {
+    const d = this.viewDist;
+    const positions = {
+      iso: [d * 0.75, d * 0.45, d * 0.9],
+      front: [0, 0, d * 1.25],
+      side: [d * 1.25, 0, 0.0001],
+      top: [0.0001, d * 1.25, 0],
+    };
+    this.camera.position.set(...(positions[name] || positions.iso));
+    this.controls.target.set(0, 0, 0);
+    this.controls.update();
   }
 
   setCutaway(on) {
@@ -176,9 +194,4 @@ export class MotorViewer {
     }
   }
 
-  resetView() {
-    this.camera.position.copy(this.homeCamera);
-    this.controls.target.set(0, 0, 0);
-    this.controls.update();
-  }
 }

@@ -7,7 +7,7 @@ import math
 
 from flask import Flask, Response, jsonify, redirect, render_template, request
 
-from ignitionbench.export import bates_segment_stl
+from ignitionbench.export import grain_segment_stl
 from ignitionbench.nozzle import (
     ConicalNozzle,
     mass_flow,
@@ -279,10 +279,15 @@ def create_app() -> Flask:
     @app.get("/api/stl")
     def stl():
         try:
-            outer = float(request.args["outer_d_mm"]) / 1000
-            core = float(request.args["core_d_mm"]) / 1000
-            length = float(request.args["length_mm"]) / 1000
-            data = bates_segment_stl(outer, core, length)
+            data = grain_segment_stl(
+                float(request.args["outer_d_mm"]) / 1000,
+                float(request.args["core_d_mm"]) / 1000,
+                float(request.args["length_mm"]) / 1000,
+                slit_count=int(request.args.get("slit_count") or 0),
+                slit_depth=float(request.args.get("slit_depth_mm") or 0) / 1000,
+                slit_width=float(request.args.get("slit_width_mm") or 0) / 1000,
+                slit_taper=float(request.args.get("slit_taper_pct") or 0) / 100,
+            )
         except (KeyError, TypeError, ValueError) as exc:
             return jsonify({"error": f"Invalid grain dimensions: {exc}"}), 422
         return Response(

@@ -191,13 +191,98 @@ async function refreshDesign() {
     thrust_n: d.thrust_n,
   };
 
-  const stlBtn = $("stlBtn");
-  stlBtn.disabled = project.grain.slit_count > 0;
-  stlBtn.title = stlBtn.disabled
-    ? "STL export currently supports plain BATES grains only"
-    : "Export one grain segment as STL for CAD or 3D printing";
-
   viewer.rebuild(d.geometry);
+  drawNozzleSection(d.geometry);
+}
+
+// ---------- nozzle section drawing ----------
+
+function drawNozzleSection(geo) {
+  const W = 640, H = 300, yc = 132, wall = 3;
+  const Rin = geo.outer_d_mm / 2;
+  const rt = geo.throat_d_mm / 2;
+  const re = geo.exit_d_mm / 2;
+  const conv = Rin - rt; // 45° convergent
+  const div = geo.divergent_length_mm;
+  const total = conv + div;
+  const maxR = Math.max(Rin, re) + wall;
+  const s = Math.min((yc - 46) / maxR, 340 / total);
+  const x0 = (W - total * s) / 2 + 10;
+  const xt = x0 + conv * s;
+  const xe = x0 + total * s;
+  const yBot = yc + maxR * s;
+
+  const DIM = "#75746b", INK = "#e8e6df", PROFILE = "#d8d6cd";
+  const mono = `font-family="ui-monospace,Menlo,monospace" font-size="10.5" fill="${INK}"`;
+  const el = [];
+
+  el.push(`<defs>
+    <marker id="dimArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,1.5L10,5L0,8.5Z" fill="${DIM}"/>
+    </marker>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#4a4844" stroke-width="1.1"/>
+    </pattern>
+  </defs>`);
+
+  // centerline (dash-dot)
+  el.push(`<line x1="${x0 - 34}" y1="${yc}" x2="${xe + 34}" y2="${yc}" stroke="#6b6a61" stroke-width="1" stroke-dasharray="13 4 3 4"/>`);
+
+  // hatched section solids, top and bottom
+  for (const m of [1, -1]) {
+    const pts = [
+      [x0, yc - m * (Rin + wall) * s],
+      [xe, yc - m * (re + wall) * s],
+      [xe, yc - m * re * s],
+      [xt, yc - m * rt * s],
+      [x0, yc - m * Rin * s],
+    ].map((p) => p.map((v) => v.toFixed(1)).join(",")).join(" ");
+    el.push(`<polygon points="${pts}" fill="url(#hatch)" stroke="${PROFILE}" stroke-width="1.5" stroke-linejoin="round"/>`);
+  }
+
+  const dimLine = (x1, y1, x2, y2) =>
+    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${DIM}" stroke-width="1" marker-start="url(#dimArrow)" marker-end="url(#dimArrow)"/>`;
+  const extLine = (x1, y1, x2, y2) =>
+    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${DIM}" stroke-width="0.75"/>`;
+
+  // Ø inlet — vertical dimension left of the inlet face
+  const xd0 = x0 - 26;
+  el.push(extLine(x0 - 4, yc - Rin * s, xd0 - 4, yc - Rin * s));
+  el.push(extLine(x0 - 4, yc + Rin * s, xd0 - 4, yc + Rin * s));
+  el.push(dimLine(xd0, yc - Rin * s, xd0, yc + Rin * s));
+  el.push(`<text x="${xd0 - 6}" y="${yc + 3.5}" text-anchor="end" ${mono}>⌀${fmt(geo.outer_d_mm, 1)}</text>`);
+
+  // Ø exit — vertical dimension right of the exit face
+  const xd1 = xe + 26;
+  el.push(extLine(xe + 4, yc - re * s, xd1 + 4, yc - re * s));
+  el.push(extLine(xe + 4, yc + re * s, xd1 + 4, yc + re * s));
+  el.push(dimLine(xd1, yc - re * s, xd1, yc + re * s));
+  el.push(`<text x="${xd1 + 6}" y="${yc + 3.5}" ${mono}>⌀${fmt(geo.exit_d_mm, 1)}</text>`);
+
+  // Ø throat — arrows across the gap plus a leader to a label above
+  el.push(dimLine(xt, yc - rt * s, xt, yc + rt * s));
+  el.push(extLine(xt, yc - rt * s, xt + 26, yc - maxR * s - 12));
+  el.push(`<text x="${xt + 29}" y="${yc - maxR * s - 9}" ${mono}>⌀${fmt(geo.throat_d_mm, 1)} throat</text>`);
+
+  // lengths below: convergent + divergent, then overall
+  const y1 = yBot + 24, y2 = y1 + 24;
+  el.push(extLine(x0, yBot + 4, x0, y2 + 4));
+  el.push(extLine(xt, yc + rt * s + 4, xt, y1 + 4));
+  el.push(extLine(xe, yBot + 4, xe, y2 + 4));
+  el.push(dimLine(x0, y1, xt, y1));
+  el.push(`<text x="${(x0 + xt) / 2}" y="${y1 - 4}" text-anchor="middle" ${mono}>${fmt(conv, 1)}</text>`);
+  el.push(dimLine(xt, y1, xe, y1));
+  el.push(`<text x="${(xt + xe) / 2}" y="${y1 - 4}" text-anchor="middle" ${mono}>${fmt(div, 1)}</text>`);
+  el.push(dimLine(x0, y2, xe, y2));
+  el.push(`<text x="${(x0 + xe) / 2}" y="${y2 - 4}" text-anchor="middle" ${mono}>${fmt(total, 1)}</text>`);
+
+  // angle callouts on the top wall of each cone
+  el.push(`<text x="${x0 + conv * s * 0.35}" y="${yc - (Rin - conv * 0.35) * s - 8}" ${mono} fill="#c3c2b7">45°</text>`);
+  el.push(`<text x="${xt + div * s * 0.5}" y="${yc - (rt + (re - rt) * 0.5) * s - 10}" ${mono} fill="#c3c2b7">α ${fmt(geo.half_angle_deg, 0)}°</text>`);
+
+  el.push(`<text x="${W - 8}" y="${H - 8}" text-anchor="end" font-size="10" fill="#8f8e84">SECTION A-A · conical de Laval · ε ${fmt((re * re) / (rt * rt), 2)}:1</text>`);
+
+  $("nozzleSection").innerHTML = el.join("");
 }
 
 // ---------- simulation tab ----------
@@ -439,10 +524,16 @@ $("projectName").addEventListener("keydown", (e) => {
 });
 
 $("cutaway").addEventListener("change", (e) => viewer.setCutaway(e.target.checked));
-$("resetView").addEventListener("click", () => viewer.resetView());
+document.querySelectorAll(".view-group [data-view]").forEach((btn) =>
+  btn.addEventListener("click", () => viewer.setView(btn.dataset.view)));
 $("stlBtn").addEventListener("click", () => {
   const g = project.grain;
-  location.href = `/api/stl?outer_d_mm=${g.outer_d_mm}&core_d_mm=${g.core_d_mm}&length_mm=${g.length_mm}`;
+  const params = new URLSearchParams({
+    outer_d_mm: g.outer_d_mm, core_d_mm: g.core_d_mm, length_mm: g.length_mm,
+    slit_count: g.slit_count || 0, slit_depth_mm: g.slit_depth_mm,
+    slit_width_mm: g.slit_width_mm, slit_taper_pct: g.slit_taper_pct,
+  });
+  location.href = `/api/stl?${params}`;
 });
 
 // ---------- boot ----------

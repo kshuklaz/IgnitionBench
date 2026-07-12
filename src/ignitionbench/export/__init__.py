@@ -1,3 +1,3 @@
-from .stl import bates_segment_stl
+from .stl import grain_segment_stl
 
-__all__ = ["bates_segment_stl"]
+__all__ = ["grain_segment_stl"]

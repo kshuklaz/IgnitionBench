@@ -129,11 +129,20 @@
             <h2>3D model</h2>
             <div class="viewer-controls">
               <label class="check"><input type="checkbox" id="cutaway" checked> Cutaway</label>
-              <button class="btn small" id="resetView">Reset view</button>
+              <div class="view-group">
+                <button class="btn small" data-view="iso">Iso</button>
+                <button class="btn small" data-view="front">Front</button>
+                <button class="btn small" data-view="side">Side</button>
+                <button class="btn small" data-view="top">Top</button>
+              </div>
             </div>
           </div>
           <canvas id="viewer3d"></canvas>
           <p class="footnote">Drag to orbit · scroll to zoom · right-drag to pan — rendered with Three.js</p>
+        </div>
+        <div class="panel">
+          <h2>Nozzle section — dimensions in mm</h2>
+          <svg id="nozzleSection" viewBox="0 0 640 300" role="img" aria-label="Dimensioned nozzle cross-section"></svg>
         </div>
         <div class="panel">
           <h2>Safety</h2>

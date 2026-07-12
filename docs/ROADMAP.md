@@ -37,6 +37,8 @@ phase so the product stays grounded in real rocket science.
 
 ## Year 2+ — Advanced features
 
+- Parametric CAD integration (build123d / CadQuery) — full motor assemblies
+  driven by the design parameters, STEP export for FreeCAD/Fusion/Onshape
 - Hybrid motor support (liquid oxidiser + solid fuel grain)
 - 6-DOF trajectory simulation
 - Fin stability analysis (Barrowman equations)
