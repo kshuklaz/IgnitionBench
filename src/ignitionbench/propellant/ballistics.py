@@ -56,14 +56,14 @@ def steady_state_pressure(propellant: Propellant, kn_ratio: float) -> float:
     if residual(p_hi) < 0:
         raise ValueError(
             f"Kn = {kn_ratio:.0f} drives {propellant.name} above its validated "
-            f"maximum of {p_hi / 1e6:.2f} MPa — overpressure risk. Reduce Kn "
-            "(larger throat or less burning surface)."
+            f"maximum of {p_hi / 6895:.0f} psi ({p_hi / 1e6:.2f} MPa) — overpressure "
+            "risk. Reduce Kn (larger throat or less burning surface)."
         )
     if residual(p_lo) > 0:
         raise ValueError(
             f"Kn = {kn_ratio:.0f} cannot sustain {propellant.name}'s minimum "
-            f"validated pressure of {p_lo / 1e6:.2f} MPa — the motor would "
-            "likely not reach stable combustion. Increase Kn."
+            f"validated pressure of {p_lo / 6895:.0f} psi ({p_lo / 1e6:.2f} MPa) — "
+            "the motor would likely not reach stable combustion. Increase Kn."
         )
     return brentq(residual, p_lo, p_hi)
 

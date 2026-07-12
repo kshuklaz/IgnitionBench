@@ -137,7 +137,7 @@ def _design_result(prop: Propellant, grain: BatesGrain, throat_area: float, half
             {
                 "level": "serious",
                 "text": f"Chamber pressure is within 15% of the propellant's validated "
-                f"data limit ({prop.max_pressure / 1e6:.1f} MPa). Reduce Kn for margin.",
+                f"data limit ({prop.max_pressure / 6895:.0f} psi). Reduce Kn for margin.",
             }
         )
 

@@ -76,12 +76,12 @@ function designPayload() {
 }
 
 function burnRateSamples() {
-  // returns {p: MPa[], r: mm/s[]} for the active propellant
+  // returns {p: psi[], r: mm/s[]} for the active propellant
   const ps = [], rs = [];
   const sample = (pMin, pMax, a, n) => {
     for (let i = 0; i <= 30; i++) {
       const p = pMin + (i / 30) * (pMax - pMin);
-      ps.push(p / 1e6);
+      ps.push(p / 6895);
       rs.push(a * Math.pow(p, n) * 1000);
     }
   };
@@ -108,7 +108,7 @@ function renderPropellantTab() {
         <tr><td>c* characteristic velocity</td><td>${fmt(lib.c_star, 0)} m/s</td></tr>
         <tr><td>γ exhaust</td><td>${fmt(lib.gamma, 3)}</td></tr>
         <tr><td>Flame temperature</td><td>${fmt(lib.temp_k, 0)} K</td></tr>
-        <tr><td>Validated range</td><td>${fmt(lib.min_pressure / 1e6, 2)}–${fmt(lib.max_pressure / 1e6, 1)} MPa</td></tr>
+        <tr><td>Validated range</td><td>${fmt(lib.min_pressure / 6895, 0)}–${fmt(lib.max_pressure / 6895, 0)} psi</td></tr>
         <tr><td>Burn-rate segments</td><td>${lib.segments.length}</td></tr>`;
     }
   }
@@ -116,7 +116,7 @@ function renderPropellantTab() {
   if (samples) {
     lineChart($("burnRateChart"), {
       x: samples.p, y: samples.r,
-      xLabel: "chamber pressure (MPa)", yLabel: "mm/s",
+      xLabel: "chamber pressure (psi)", yLabel: "mm/s",
       yFmt: (v) => fmt(v, 1),
     });
     $("propSummary").textContent =
@@ -154,8 +154,8 @@ async function refreshDesign() {
   lastDesign = d;
 
   $("v_kn").textContent = fmt(d.kn, 0);
-  $("v_pc").textContent = fmt(d.chamber_pressure_mpa, 2) + " MPa";
-  $("s_pc").textContent = fmt(d.chamber_pressure_psi, 0) + " psi";
+  $("v_pc").textContent = fmt(d.chamber_pressure_psi, 0) + " psi";
+  $("s_pc").textContent = fmt(d.chamber_pressure_mpa, 2) + " MPa";
   $("v_thrust").textContent = fmt(d.thrust_n, 0) + " N";
   $("v_class").textContent = d.motor_class;
   $("s_cert").textContent = d.certification.level === "none" ? "no cert needed" : d.certification.level + " cert";
@@ -307,8 +307,8 @@ async function runSimulation() {
 
   $("m_maxF").textContent = fmt(d.max_thrust, 0) + " N";
   $("s_avgF").textContent = "avg " + fmt(d.avg_thrust, 0) + " N";
-  $("m_maxP").textContent = fmt(d.max_pressure / 1e6, 2) + " MPa";
-  $("s_maxP").textContent = fmt(d.max_pressure / 6895, 0) + " psi";
+  $("m_maxP").textContent = fmt(d.max_pressure / 6895, 0) + " psi";
+  $("s_maxP").textContent = fmt(d.max_pressure / 1e6, 2) + " MPa";
   $("m_tb").textContent = fmt(d.burn_time, 2) + " s";
   $("m_It").textContent = fmt(d.total_impulse, 0) + " N·s";
   $("s_class").textContent = `class ${d.motor_class} · ${d.certification.text}`;
@@ -319,7 +319,7 @@ async function runSimulation() {
     x: d.time, y: d.thrust, xLabel: "time (s)", yLabel: "N", yFmt: (v) => fmt(v, 0),
   });
   charts.pressure = lineChart($("pressureChart"), {
-    x: d.time, y: d.pressure.map((p) => p / 1e6), xLabel: "time (s)", yLabel: "MPa", yFmt: (v) => fmt(v, 2),
+    x: d.time, y: d.pressure.map((p) => p / 6895), xLabel: "time (s)", yLabel: "psi", yFmt: (v) => fmt(v, 0),
   });
 
   $("scrubber").max = d.time.length - 1;
@@ -353,7 +353,7 @@ function setFrame(i) {
   drawSide(g, webMm);
   $("animReadout").innerHTML =
     `Kn <b>${fmt(sim.kn[i], 0)}</b> · ` +
-    `Pc <b>${fmt(sim.pressure[i] / 1e6, 2)} MPa</b> · ` +
+    `Pc <b>${fmt(sim.pressure[i] / 6895, 0)} psi</b> · ` +
     `thrust <b>${fmt(sim.thrust[i], 0)} N</b> · ` +
     `propellant <b>${fmt(sim.mass[i] * 1000, 0)} g</b> · ` +
     `web burned <b>${fmt(webMm, 1)} mm</b>`;

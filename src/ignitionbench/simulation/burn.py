@@ -80,7 +80,7 @@ def simulate_burn(
                 raise ValueError(
                     f"Overpressure at t = {t:.2f} s (web {x * 1000:.1f} mm, Kn = {kn_i:.0f}): "
                     f"the design exceeds {propellant.name}'s validated maximum of "
-                    f"{propellant.max_pressure / 1e6:.2f} MPa mid-burn."
+                    f"{propellant.max_pressure / 6895:.0f} psi mid-burn."
                 ) from None
             # Kn too low to sustain the validated minimum — treat the tail as
             # burning at the lowest characterized pressure.
