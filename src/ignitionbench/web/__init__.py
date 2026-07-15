@@ -296,13 +296,14 @@ def create_app() -> Flask:
                 slit_width=float(request.args.get("slit_width_mm") or 0) / 1000,
                 slit_length=float(request.args.get("slit_length_mm") or 0) / 1000,
                 slit_taper=float(request.args.get("slit_taper_pct") or 0) / 100,
+                segment_count=int(request.args.get("segments") or 1),
             )
         except (KeyError, TypeError, ValueError) as exc:
             return jsonify({"error": f"Invalid grain dimensions: {exc}"}), 422
         return Response(
             data,
             mimetype="model/stl",
-            headers={"Content-Disposition": "attachment; filename=grain-segment.stl"},
+            headers={"Content-Disposition": "attachment; filename=grain.stl"},
         )
 
     return app

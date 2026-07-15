@@ -7,10 +7,11 @@ from ignitionbench.simulation import simulate_burn
 
 BATES = BatesGrain(3, 0.054, 0.020, 0.095)
 PLAIN = FaceSlitGrain(3, 0.054, 0.020, 0.095)
+# one continuous cut, 100 mm from the motor front — crosses into segment 2
 SLIT = FaceSlitGrain(
     3, 0.054, 0.020, 0.095,
     slit_count=3, slit_depth=0.008, slit_width=0.003,
-    slit_length=0.030, slit_taper=0.3,
+    slit_length=0.100, slit_taper=0.3,
 )
 
 
@@ -57,7 +58,7 @@ def test_validation():
     with pytest.raises(ValueError, match="nozzle-end face"):
         FaceSlitGrain(
             3, 0.054, 0.020, 0.095,
-            slit_count=3, slit_depth=0.008, slit_width=0.003, slit_length=0.095,
+            slit_count=3, slit_depth=0.008, slit_width=0.003, slit_length=0.300,
         )
     with pytest.raises(ValueError, match="overlap"):
         FaceSlitGrain(
@@ -81,6 +82,24 @@ def test_regression_section_payload():
     sec = regression_section(SLIT)
     assert sec["nu"] * sec["nz"] == len(sec["dist_mm"])
     assert sec["web_mm"] == pytest.approx(SLIT.web_thickness * 1000, rel=0.01)
-    # the section spans the outer radius and the full segment length
+    # the section spans the outer radius and the whole stack (3 segments
+    # of 95 mm plus two 3 mm gaps)
     assert sec["nu"] * sec["du_mm"] == pytest.approx(27.0, abs=1.0)
-    assert sec["nz"] * sec["dz_mm"] == pytest.approx(95.0, abs=2.0)
+    assert sec["nz"] * sec["dz_mm"] == pytest.approx(291.0, abs=4.0)
+
+
+def test_cut_carries_across_the_joint():
+    # the forward segment's aft face keeps an open mouth where the cut
+    # carries through, and segment 2 starts at exactly that scale
+    from ignitionbench.propellant.grain3d import _rings
+
+    fwd = _rings(0.095, 3, 0.100, 0.3, 0.0)
+    nxt = _rings(0.095, 3, 0.100, 0.3, 0.095)
+    assert fwd[-1][0] == pytest.approx(0.095)
+    assert fwd[-1][1] == pytest.approx(nxt[0][1])  # scales match at the joint
+    assert fwd[-1][1] > 0  # open mouth, not a closed wall
+    # the cut ends 5 mm into segment 2, then it is a plain bore
+    assert nxt[-2] == (pytest.approx(0.005), 0.0)
+    assert nxt[-1] == (pytest.approx(0.095), 0.0)
+    # segment 3 is entirely past the cut
+    assert _rings(0.095, 3, 0.100, 0.3, 0.190) == [(0.0, 0.0), (0.095, 0.0)]

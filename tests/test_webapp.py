@@ -100,7 +100,7 @@ def test_design_and_simulate_with_slit_grain(client):
             "slit_count": 3,
             "slit_depth_mm": 8,
             "slit_width_mm": 3,
-            "slit_length_mm": 30,
+            "slit_length_mm": 100,
             "slit_taper_pct": 30,
         },
     }
@@ -108,7 +108,7 @@ def test_design_and_simulate_with_slit_grain(client):
     d = client.post("/api/design", json=slotted).get_json()
     assert d["kn"] > 1.05 * plain["kn"]  # face slits add burning surface
     assert d["geometry"]["slit_count"] == 3
-    assert d["geometry"]["slit_length_mm"] == pytest.approx(30)
+    assert d["geometry"]["slit_length_mm"] == pytest.approx(100)
 
     sim = client.post("/api/simulate", json=slotted)
     assert sim.status_code == 200

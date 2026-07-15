@@ -64,6 +64,28 @@ def test_slotted_stl_carves_tapered_face_slits():
     assert all(r < 27.0 for rs in by_z.values() for r in rs)
 
 
+def test_stack_export_carries_the_cut_across_segments():
+    data = grain_segment_stl(
+        0.054, 0.020, 0.095,
+        slit_count=3, slit_depth=0.008, slit_width=0.003,
+        slit_length=0.100, slit_taper=0.3,
+        sections=180, segment_count=3,
+    )
+    zs = [z for _, _, z in _vertices(data)]
+    # three solids spaced by 3 mm gaps: 3·95 + 2·3 = 291 mm
+    assert max(zs) == pytest.approx(291.0)
+    # segment 2 (98–193 mm) still carries slit walls at its start, and
+    # segment 3 (196 mm on) is a plain bore
+    def inner_max(z_lo, z_hi):
+        return max(
+            math.hypot(x, y)
+            for x, y, z in _vertices(data)
+            if z_lo <= z <= z_hi and math.hypot(x, y) < 26.9
+        )
+    assert inner_max(97.9, 100.0) > 11.0  # open mouth at the joint
+    assert inner_max(195.9, 291.1) == pytest.approx(10.0, abs=0.1)
+
+
 def test_rejects_bad_geometry():
     with pytest.raises(ValueError):
         grain_segment_stl(0.02, 0.054, 0.095)

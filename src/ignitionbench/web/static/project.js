@@ -418,18 +418,24 @@ function drawFace(g, webMm) {
     <text x="${c}" y="${S - 3}" fill="#8f8e84" font-size="10" text-anchor="middle">face view</text>`;
 }
 
-// Analytic distance field for a plain BATES segment: nearest of core wall
-// and the two faces. Same payload shape as the server's slit section.
+// Analytic distance field for a plain BATES stack: per segment the nearest
+// of core wall and the two faces, inter-segment gaps as void. Same payload
+// shape as the server's slit section.
 function batesSection(g) {
   const R = g.outer_d_mm / 2, rc = g.core_d_mm / 2, L = g.length_mm;
-  const nu = 80, nz = 200;
-  const du = R / nu, dz = L / nz;
+  const nu = 80, du = R / nu;
+  const dz = 0.5, gapCols = Math.round(3 / dz);
+  const nzSeg = Math.max(Math.ceil(L / dz), 8);
+  const nz = g.segments * nzSeg + (g.segments - 1) * gapCols;
   const dist = new Float64Array(nu * nz);
   for (let iu = 0; iu < nu; iu++) {
     const u = (iu + 0.5) * du;
-    for (let iz = 0; iz < nz; iz++) {
-      const z = (iz + 0.5) * dz;
-      dist[iu * nz + iz] = u <= rc ? 0 : Math.min(u - rc, z, L - z);
+    for (let s = 0; s < g.segments; s++) {
+      const col0 = s * (nzSeg + gapCols);
+      for (let iz = 0; iz < nzSeg; iz++) {
+        const z = (iz + 0.5) * (L / nzSeg);
+        dist[iu * nz + col0 + iz] = u <= rc ? 0 : Math.min(u - rc, z, L - z);
+      }
     }
   }
   return {
@@ -594,6 +600,8 @@ $("stlBtn").addEventListener("click", () => {
     slit_count: g.slit_count || 0, slit_depth_mm: g.slit_depth_mm,
     slit_width_mm: g.slit_width_mm, slit_length_mm: g.slit_length_mm,
     slit_taper_pct: g.slit_taper_pct,
+    // the cut differs per segment, so slitted grains export the whole stack
+    segments: g.slit_count > 0 ? g.segments : 1,
   });
   location.href = `/api/stl?${params}`;
 });

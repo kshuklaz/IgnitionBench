@@ -34,27 +34,31 @@ function innerRadiusAt(g, theta, scale) {
   return best;
 }
 
-// (z, scale) mesh rings from the forward face (z = 0, where the slits are
-// cut) to the nozzle-end face; the duplicate-z pair marks the flat wall
-// where the cut ends.
-function ringList(g) {
+// (z, scale) mesh rings for one segment whose forward face sits offsetMm
+// along the single cut that runs aft from the motor front; the duplicate-z
+// pair marks the flat wall where the cut ends inside this segment, while a
+// cut that carries through leaves an open mouth on the aft face.
+function ringList(g, offsetMm) {
   const L = g.length_mm;
-  if (!g.slit_count) return [[0, 0], [L, 0]];
-  const Lc = Math.min(g.slit_length_mm || L / 3, L * 0.99);
+  const Lc = g.slit_length_mm || 0;
+  if (!g.slit_count || offsetMm >= Lc) return [[0, 0], [L, 0]];
   const taper = g.slit_taper ?? 0;
+  const scale = (along) => 1 - (along / Lc) * (1 - taper);
+  const local = Math.min(L, Lc - offsetMm);
   const steps = 12;
   const rings = [];
   for (let j = 0; j <= steps; j++) {
-    rings.push([(Lc * j) / steps, 1 - (j / steps) * (1 - taper)]);
+    const z = (local * j) / steps;
+    rings.push([z, scale(offsetMm + z)]);
   }
-  rings.push([Lc, 0], [L, 0]);
+  if (local < L) rings.push([local, 0], [L, 0]);
   return rings;
 }
 
 // Grain segment as a triangle soup (mm): inner surface with tapered slit
 // pockets, end faces, outer wall, and — when cut — capped section profiles.
-function grainGeometry(g, rOuter, cut) {
-  const rings = ringList(g);
+function grainGeometry(g, rOuter, cut, offsetMm) {
+  const rings = ringList(g, offsetMm);
   const a0 = cut ? SWEEP_START : 0;
   const span = cut ? SWEEP : Math.PI * 2;
   const M = cut ? 216 : 256;
@@ -255,13 +259,16 @@ export class MotorViewer {
     capGeom.rotateY(Math.PI / 2);
     group.add(this._mesh(capGeom, steel));
 
-    // grain segments: parametric surface with the tapered face-slit pockets
-    // (triangle soup — skip the edge overlay, it would outline every facet)
-    const grainGeom = grainGeometry(g, (g.outer_d_mm / 2) * 0.998, cut);
-    grainGeom.scale(MM, MM, MM);
-    grainGeom.rotateY(Math.PI / 2);
+    // grain segments: parametric surface with the slit pockets. The single
+    // cut runs aft from the motor front, so each segment gets its own
+    // geometry at its offset along the cut. (Triangle soup — skip the edge
+    // overlay, it would outline every facet.)
     for (let i = 0; i < g.segments; i++) {
-      const seg = new THREE.Mesh(grainGeom.clone(), fuel);
+      const grainGeom = grainGeometry(
+        g, (g.outer_d_mm / 2) * 0.998, cut, i * g.length_mm);
+      grainGeom.scale(MM, MM, MM);
+      grainGeom.rotateY(Math.PI / 2);
+      const seg = new THREE.Mesh(grainGeom, fuel);
       seg.position.x = (BULKHEAD + FWD) * MM + i * (segLen + GAP * MM);
       group.add(seg);
     }
