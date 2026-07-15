@@ -1,4 +1,7 @@
-# IgnitionBench
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-white.png">
+  <img src="assets/logo-black.png" alt="IgnitionBench" width="420">
+</picture>
 
 AI-powered rocket motor design software for hobbyist rocketeers.
 

@@ -5,14 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IgnitionBench — Projects</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
 </head>
 <body>
 <header>
   <div class="brand">
-    <img class="logo" src="{{ url_for('static', filename='logo.svg') }}" alt="">
     <div>
-      <h1>IgnitionBench</h1>
+      <img class="logo-full" src="{{ url_for('static', filename='logo-full.png') }}" alt="IgnitionBench">
       <p>Solid rocket motor design studio</p>
     </div>
   </div>
@@ -21,7 +20,7 @@
 
 <main class="home">
   <div class="empty-state" id="emptyState" hidden>
-    <img class="empty-logo" src="{{ url_for('static', filename='logo.svg') }}" alt="">
+    <img class="empty-logo" src="{{ url_for('static', filename='logo-full.png') }}" alt="">
     <h2>No projects yet</h2>
     <p>Start your first motor — pick a propellant, shape the grain, and watch it burn.</p>
     <button class="btn primary" id="emptyNewBtn">Start your first motor</button>
