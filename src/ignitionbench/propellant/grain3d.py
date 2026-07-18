@@ -396,6 +396,22 @@ def _ignition_area(grain: FaceSlitGrain, cut_offset: float) -> float:
 # ---- voxel tables ----
 
 
+def _radial_slice(
+    dist: np.ndarray, axis: np.ndarray, cell: float, nz: int, ang: float
+) -> np.ndarray:
+    """Interpolated (u, z) slice of the distance field along one radial ray,
+    u ascending from the motor axis outward."""
+    nu = len(axis) // 2
+    us = (np.arange(nu) + 0.5) * cell
+    ix = (us * math.cos(ang) - axis[0]) / cell
+    iy = (us * math.sin(ang) - axis[0]) / cell
+    coords = np.empty((3, nu, nz))
+    coords[0] = ix[:, None]
+    coords[1] = iy[:, None]
+    coords[2] = np.arange(nz)[None, :]
+    return ndimage.map_coordinates(dist, coords, order=1).astype(np.float32)
+
+
 @lru_cache(maxsize=16)
 def _build_table(grain: FaceSlitGrain, cut_offset: float) -> _Table3D:
     R = grain.outer_diameter / 2
@@ -443,10 +459,17 @@ def _build_table(grain: FaceSlitGrain, cut_offset: float) -> _Table3D:
     inside = (~void) & (rr <= R)[:, :, None]
     dists = np.sort(dist[inside].ravel())
 
-    # (u, z) section through slit axis 0 = -y for the regression view
-    ixc = int(np.argmin(np.abs(axis)))
-    idx = np.where(axis <= cell / 2)[0][::-1]  # u ascending 0 → R
-    section = dist[ixc, idx, :].astype(np.float32)
+    # full-bore (u, z) section for the regression view: the top half is the
+    # ray midway between slits, the bottom half the ray through slit axis 0,
+    # so the display shows both the slitted and the plain side of the bore
+    through = _radial_slice(dist, axis, cell, nz, -math.pi / 2)
+    ang = (
+        -math.pi / 2 + math.pi / grain.slit_count
+        if grain.slit_count
+        else math.pi / 2
+    )
+    between = _radial_slice(dist, axis, cell, nz, ang)
+    section = np.vstack([between[::-1], through])  # rows run +R → -R
 
     return _Table3D(
         sorted_dists=dists,
@@ -457,10 +480,11 @@ def _build_table(grain: FaceSlitGrain, cut_offset: float) -> _Table3D:
     )
 
 
-def regression_section(grain: FaceSlitGrain, max_u: int = 96, max_z: int = 220) -> dict:
-    """Downsampled (u, z) distance field through a slit axis for the UI:
-    u radial from the motor axis, z along the whole grain stack from the
-    forward face to the nozzle end, with the inter-segment gaps as void."""
+def regression_section(grain: FaceSlitGrain, max_u: int = 128, max_z: int = 220) -> dict:
+    """Downsampled full-bore (u, z) distance field for the UI: u spans the
+    bore diameter (top half between slits, bottom half through a slit), z
+    runs along the whole grain stack from the forward face to the nozzle
+    end, with the inter-segment gaps as void."""
     sections = [
         _build_table(grain, grain._cut_key(off)).section_dist
         for off in grain._offsets()
@@ -476,7 +500,13 @@ def regression_section(grain: FaceSlitGrain, max_u: int = 96, max_z: int = 220) 
     full = np.concatenate(columns, axis=1)
     su = max(1, math.ceil(full.shape[0] / max_u))
     sz = max(1, math.ceil(full.shape[1] / max_z))
-    ds = full[::su, ::sz]
+    # block-mean pooling: striding would turn the slit taper into a staircase
+    pu = (-full.shape[0]) % su
+    pz = (-full.shape[1]) % sz
+    full = np.pad(full, ((0, pu), (0, pz)), mode="edge")
+    ds = full.reshape(full.shape[0] // su, su, full.shape[1] // sz, sz).mean(
+        axis=(1, 3)
+    )
     return {
         "du_mm": table.cell * su * 1000,
         "dz_mm": table.cell * sz * 1000,

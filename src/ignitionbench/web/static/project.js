@@ -420,16 +420,17 @@ function drawFace(g, webMm) {
 
 // Analytic distance field for a plain BATES stack: per segment the nearest
 // of core wall and the two faces, inter-segment gaps as void. Same payload
-// shape as the server's slit section.
+// shape as the server's slit section: rows span the full bore diameter,
+// top row at +R, bottom row at -R.
 function batesSection(g) {
   const R = g.outer_d_mm / 2, rc = g.core_d_mm / 2, L = g.length_mm;
-  const nu = 80, du = R / nu;
+  const half = 80, nu = 2 * half, du = R / half;
   const dz = 0.5, gapCols = Math.round(3 / dz);
   const nzSeg = Math.max(Math.ceil(L / dz), 8);
   const nz = g.segments * nzSeg + (g.segments - 1) * gapCols;
   const dist = new Float64Array(nu * nz);
   for (let iu = 0; iu < nu; iu++) {
-    const u = (iu + 0.5) * du;
+    const u = Math.abs((iu + 0.5) * du - R); // radial distance from the axis
     for (let s = 0; s < g.segments; s++) {
       const col0 = s * (nzSeg + gapCols);
       for (let iz = 0; iz < nzSeg; iz++) {
@@ -444,8 +445,10 @@ function batesSection(g) {
   };
 }
 
-// One segment in axial section through a slit axis, openMotor style: colour
-// encodes when each point burns, dark = already consumed, white = the front.
+// Axial section of the whole stack at true proportions, openMotor style:
+// colour encodes when each point burns, dark = already consumed, white =
+// the front. Rows span the bore diameter — for a slitted grain the top
+// half is the ray between slits, the bottom half the ray through a slit.
 function drawSection(g, webMm) {
   const cv = $("sectionView");
   const ctx = cv.getContext("2d");
@@ -459,9 +462,9 @@ function drawSection(g, webMm) {
 
   const img = new ImageData(nz, nu);
   for (let iu = 0; iu < nu; iu++) {
-    const row = (nu - 1 - iu) * nz; // u = 0 (motor axis) at the bottom
+    const row = iu * nz; // rows already run top (+R) to bottom (-R)
     for (let iz = 0; iz < nz; iz++) {
-      const d = sec.dist_mm[iu * nz + iz];
+      const d = sec.dist_mm[row + iz];
       const o = (row + iz) * 4;
       if (d <= 0) {
         img.data[o + 3] = 0; // void from the start — panel background
@@ -481,35 +484,42 @@ function drawSection(g, webMm) {
     }
   }
 
+  // scale mm → px uniformly so the motor keeps its real proportions
+  const wMm = nz * sec.dz_mm, hMm = nu * sec.du_mm;
+  const s = Math.min((W - 2 * padX) / wMm, (H - padT - padB) / hMm);
+  const dw = wMm * s, dh = hMm * s;
+  const x0 = padX + (W - 2 * padX - dw) / 2;
+  const y0 = padT + (H - padT - padB - dh) / 2;
+
   const off = new OffscreenCanvas(nz, nu);
   off.getContext("2d").putImageData(img, 0, 0);
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(off, padX, padT, W - 2 * padX, H - padT - padB);
+  ctx.drawImage(off, x0, y0, dw, dh);
 
-  // motor axis under the section, casing wall above it
+  // casing walls above and below, motor axis dashed through the middle
+  ctx.fillStyle = "#6f6d66";
+  ctx.fillRect(x0, y0 - 2, dw, 2);
+  ctx.fillRect(x0, y0 + dh, dw, 2);
   ctx.strokeStyle = "#55534d";
   ctx.setLineDash([7, 5]);
   ctx.beginPath();
-  ctx.moveTo(padX - 12, H - padB);
-  ctx.lineTo(W - padX + 12, H - padB);
+  ctx.moveTo(x0 - 12, y0 + dh / 2);
+  ctx.lineTo(x0 + dw + 12, y0 + dh / 2);
   ctx.stroke();
   ctx.setLineDash([]);
-  ctx.strokeStyle = "#6f6d66";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(padX, padT - 2, W - 2 * padX, 2);
-  ctx.lineWidth = 1;
 
   ctx.fillStyle = "#8f8e84";
   ctx.font = "10px ui-monospace, Menlo, monospace";
   ctx.textAlign = "center";
+  const halves = g.slit_count > 0 ? " — top: between slits, bottom: through a slit" : "";
   ctx.fillText(
-    "axial section through a slit — colour: burn order, white: front, ─ ─ motor axis",
+    `axial section${halves} · colour: burn order · white: front`,
     W / 2, H - 8,
   );
   ctx.textAlign = "left";
-  ctx.fillText("fwd face", padX, padT - 6);
+  ctx.fillText("fwd face", x0, y0 - 6);
   ctx.textAlign = "right";
-  ctx.fillText("nozzle end", W - padX, padT - 6);
+  ctx.fillText("nozzle end", x0 + dw, y0 - 6);
 }
 
 function stopPlayback(label) {

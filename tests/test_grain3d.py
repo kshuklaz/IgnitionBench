@@ -82,10 +82,18 @@ def test_regression_section_payload():
     sec = regression_section(SLIT)
     assert sec["nu"] * sec["nz"] == len(sec["dist_mm"])
     assert sec["web_mm"] == pytest.approx(SLIT.web_thickness * 1000, rel=0.01)
-    # the section spans the outer radius and the whole stack (3 segments
+    # the section spans the bore diameter and the whole stack (3 segments
     # of 95 mm plus two 3 mm gaps)
-    assert sec["nu"] * sec["du_mm"] == pytest.approx(27.0, abs=1.0)
+    assert sec["nu"] * sec["du_mm"] == pytest.approx(54.0, abs=1.5)
     assert sec["nz"] * sec["dz_mm"] == pytest.approx(291.0, abs=4.0)
+    # bottom half cuts through a slit, top half runs between slits, so the
+    # forward columns of the bottom half carry more initial void
+    import numpy as np
+
+    arr = np.array(sec["dist_mm"]).reshape(sec["nu"], sec["nz"])
+    half = sec["nu"] // 2
+    fwd = slice(0, 5)
+    assert (arr[half:, fwd] == 0).sum() > (arr[:half, fwd] == 0).sum()
 
 
 def test_cut_carries_across_the_joint():
