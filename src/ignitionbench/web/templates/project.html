@@ -37,6 +37,7 @@ document.documentElement.dataset.theme =
   <button class="step active" data-tab="propellant"><span class="step-num">1</span> Propellant</button>
   <button class="step" data-tab="motor"><span class="step-num">2</span> Motor design</button>
   <button class="step" data-tab="simulation"><span class="step-num">3</span> Simulation</button>
+  <button class="step" data-tab="review"><span class="step-num">4</span> Review</button>
 </nav>
 
 <main class="designer">
@@ -203,10 +204,40 @@ document.documentElement.dataset.theme =
       <div class="panel"><h2>Chamber pressure</h2><div class="chart" id="pressureChart"></div></div>
     </div>
   </section>
+
+  <!-- ============ TAB 4 : REVIEW ============ -->
+  <section class="tab" id="tab-review" hidden>
+    <div class="panel">
+      <div class="anim-toolbar">
+        <h2>AI safety review</h2>
+        <button class="btn" id="reviewBtn">↻ Run review</button>
+      </div>
+      <p class="footnote">The mentor reviews the whole project — every active
+      safety warning plus hazards the app's checks don't model. It never signs
+      off a design: go/no-go authority belongs to a certified RSO or mentor.</p>
+      <div class="footnote" id="reviewStatus" hidden></div>
+      <div class="ai-md" id="reviewBody"></div>
+    </div>
+  </section>
 </main>
+
+<button class="ai-side-tab" id="aiTab" title="Ask the SRM mentor">✦ AI mentor</button>
+<aside class="ai-drawer" id="aiDrawer" hidden>
+  <div class="ai-head">
+    <h2>SRM mentor</h2>
+    <button class="btn small" id="aiClose">✕</button>
+  </div>
+  <div class="ai-messages" id="aiMessages"></div>
+  <form class="ai-input" id="aiForm">
+    <textarea id="aiText" rows="2"
+      placeholder="Ask about your design, safety, or next steps…"></textarea>
+    <button class="btn primary" id="aiSend" type="submit">Send</button>
+  </form>
+</aside>
 
 <script>window.PROJECT_ID = {{ project_id | tojson }};</script>
 <script src="{{ url_for('static', filename='theme.js') }}"></script>
+<script src="{{ url_for('static', filename='ai.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='project.js') }}"></script>
 </body>
 </html>

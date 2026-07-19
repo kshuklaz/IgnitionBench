@@ -284,6 +284,38 @@ def create_app() -> Flask:
         )
         return jsonify(payload)
 
+    # ---- AI mentor ----
+
+    from . import ai
+
+    @app.get("/api/ai/status")
+    def ai_status():
+        return jsonify({"configured": ai.configured(), "model": ai.MODEL})
+
+    @app.post("/api/ai/chat")
+    def ai_chat():
+        if not ai.configured():
+            return jsonify({"error": "AI is not configured — set ANTHROPIC_API_KEY."}), 503
+        data = request.get_json(force=True)
+        try:
+            return jsonify(ai.chat(data.get("project_id"), data.get("messages") or []))
+        except KeyError:
+            return jsonify({"error": "Project not found."}), 404
+        except ai.AIError as exc:
+            return jsonify({"error": str(exc)}), 502
+
+    @app.post("/api/ai/review")
+    def ai_review():
+        if not ai.configured():
+            return jsonify({"error": "AI is not configured — set ANTHROPIC_API_KEY."}), 503
+        data = request.get_json(force=True)
+        try:
+            return jsonify({"review": ai.review(data["project_id"])})
+        except KeyError:
+            return jsonify({"error": "Project not found."}), 404
+        except ai.AIError as exc:
+            return jsonify({"error": str(exc)}), 502
+
     @app.get("/api/stl")
     def stl():
         try:

@@ -335,6 +335,15 @@ function renderSimCharts(d) {
   });
 }
 
+// the AI mentor can edit the design through its tool; refresh everything
+// when it does
+window.addEventListener("ai-project-updated", (e) => {
+  if (!project) return;
+  project = e.detail;
+  stateToForms();
+  refreshDesign();
+});
+
 // every JS-drawn surface picks its colours at draw time, so a theme
 // switch just means drawing everything again
 window.addEventListener("themechange", () => {
@@ -587,11 +596,12 @@ $("scrubber").addEventListener("input", () => {
 document.querySelectorAll(".steps .step").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".steps .step").forEach((b) => b.classList.toggle("active", b === btn));
-    for (const name of ["propellant", "motor", "simulation"]) {
+    for (const name of ["propellant", "motor", "simulation", "review"]) {
       $(`tab-${name}`).hidden = name !== btn.dataset.tab;
     }
     if (btn.dataset.tab === "simulation" && (simStale || !sim)) runSimulation();
     if (btn.dataset.tab === "motor" && lastDesign) viewer.rebuild(lastDesign.geometry);
+    if (btn.dataset.tab === "review") window.dispatchEvent(new CustomEvent("review-tab-opened"));
   });
 });
 

@@ -50,7 +50,22 @@ document.documentElement.dataset.theme =
   </div>
 </div>
 
+<button class="ai-side-tab" id="aiTab" title="Ask the SRM mentor">✦ AI mentor</button>
+<aside class="ai-drawer" id="aiDrawer" hidden>
+  <div class="ai-head">
+    <h2>SRM mentor</h2>
+    <button class="btn small" id="aiClose">✕</button>
+  </div>
+  <div class="ai-messages" id="aiMessages"></div>
+  <form class="ai-input" id="aiForm">
+    <textarea id="aiText" rows="2"
+      placeholder="Ask about rocketry, safety, or the design process…"></textarea>
+    <button class="btn primary" id="aiSend" type="submit">Send</button>
+  </form>
+</aside>
+
 <script src="{{ url_for('static', filename='theme.js') }}"></script>
+<script src="{{ url_for('static', filename='ai.js') }}"></script>
 <script src="{{ url_for('static', filename='home.js') }}"></script>
 </body>
 </html>
