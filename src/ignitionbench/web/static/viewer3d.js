@@ -157,7 +157,6 @@ export class MotorViewer {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.renderer.setClearColor(0x141413);
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.005, 10);
@@ -172,13 +171,13 @@ export class MotorViewer {
     rim.position.set(-0.6, -0.3, -0.8);
     this.scene.add(rim);
 
-    this.grid = new THREE.GridHelper(1, 40, 0x33322f, 0x232221);
-    this.scene.add(this.grid);
-
+    this.grid = null;
     this.group = null;
     this.cutaway = true;
     this.lastGeometry = null;
     this.viewDist = 0.45;
+    this._applyTheme();
+    window.addEventListener("themechange", () => this._applyTheme());
 
     this._resize();
     window.__ibViewer = this; // debug handle
@@ -187,6 +186,23 @@ export class MotorViewer {
       this.controls.update();
       this.renderer.render(this.scene, this.camera);
     });
+  }
+
+  _applyTheme() {
+    // GridHelper bakes its colours into vertex data, so swap the whole grid
+    this.renderer.setClearColor(new THREE.Color(window.ibColor("v3d-bg")));
+    const old = this.grid;
+    this.grid = new THREE.GridHelper(
+      1, 40,
+      new THREE.Color(window.ibColor("v3d-grid-1")),
+      new THREE.Color(window.ibColor("v3d-grid-2")),
+    );
+    if (old) {
+      this.grid.position.copy(old.position);
+      this.grid.scale.copy(old.scale);
+      this.scene.remove(old);
+    }
+    this.scene.add(this.grid);
   }
 
   _resize() {

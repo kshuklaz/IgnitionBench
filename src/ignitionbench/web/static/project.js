@@ -216,7 +216,8 @@ function drawNozzleSection(geo) {
   const xe = x0 + total * s;
   const yBot = yc + maxR * s;
 
-  const DIM = "#75746b", INK = "#e8e6df", PROFILE = "#d8d6cd";
+  const C = window.ibColor;
+  const DIM = C("nz-dim"), INK = C("nz-ink"), PROFILE = C("nz-profile");
   const mono = `font-family="ui-monospace,Menlo,monospace" font-size="10.5" fill="${INK}"`;
   const el = [];
 
@@ -225,12 +226,12 @@ function drawNozzleSection(geo) {
       <path d="M0,1.5L10,5L0,8.5Z" fill="${DIM}"/>
     </marker>
     <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <line x1="0" y1="0" x2="0" y2="6" stroke="#4a4844" stroke-width="1.1"/>
+      <line x1="0" y1="0" x2="0" y2="6" stroke="${C("nz-hatch")}" stroke-width="1.1"/>
     </pattern>
   </defs>`);
 
   // centerline (dash-dot)
-  el.push(`<line x1="${x0 - 34}" y1="${yc}" x2="${xe + 34}" y2="${yc}" stroke="#6b6a61" stroke-width="1" stroke-dasharray="13 4 3 4"/>`);
+  el.push(`<line x1="${x0 - 34}" y1="${yc}" x2="${xe + 34}" y2="${yc}" stroke="${C("nz-center")}" stroke-width="1" stroke-dasharray="13 4 3 4"/>`);
 
   // hatched section solids, top and bottom
   for (const m of [1, -1]) {
@@ -281,10 +282,10 @@ function drawNozzleSection(geo) {
   el.push(`<text x="${(x0 + xe) / 2}" y="${y2 - 4}" text-anchor="middle" ${mono}>${fmt(total, 1)}</text>`);
 
   // angle callouts on the top wall of each cone
-  el.push(`<text x="${x0 + conv * s * 0.35}" y="${yc - (Rin - conv * 0.35) * s - 8}" ${mono} fill="#c3c2b7">45°</text>`);
-  el.push(`<text x="${xt + div * s * 0.5}" y="${yc - (rt + (re - rt) * 0.5) * s - 10}" ${mono} fill="#c3c2b7">α ${fmt(geo.half_angle_deg, 0)}°</text>`);
+  el.push(`<text x="${x0 + conv * s * 0.35}" y="${yc - (Rin - conv * 0.35) * s - 8}" ${mono} fill="${C("ink-2")}">45°</text>`);
+  el.push(`<text x="${xt + div * s * 0.5}" y="${yc - (rt + (re - rt) * 0.5) * s - 10}" ${mono} fill="${C("ink-2")}">α ${fmt(geo.half_angle_deg, 0)}°</text>`);
 
-  el.push(`<text x="${W - 8}" y="${H - 8}" text-anchor="end" font-size="10" fill="#8f8e84">SECTION A-A · conical de Laval · ε ${fmt((re * re) / (rt * rt), 2)}:1</text>`);
+  el.push(`<text x="${W - 8}" y="${H - 8}" text-anchor="end" font-size="10" fill="${C("ink-3")}">SECTION A-A · conical de Laval · ε ${fmt((re * re) / (rt * rt), 2)}:1</text>`);
 
   $("nozzleSection").innerHTML = el.join("");
 }
@@ -319,16 +320,32 @@ async function runSimulation() {
   $("m_isp").textContent = fmt(d.isp_delivered, 0) + " s";
   $("m_kn").textContent = fmt(d.peak_kn, 0);
 
+  renderSimCharts(d);
+
+  $("scrubber").max = d.time.length - 1;
+  setFrame(0);
+}
+
+function renderSimCharts(d) {
   charts.thrust = lineChart($("thrustChart"), {
     x: d.time, y: d.thrust, xLabel: "time (s)", yLabel: "N", yFmt: (v) => fmt(v, 0),
   });
   charts.pressure = lineChart($("pressureChart"), {
     x: d.time, y: d.pressure.map((p) => p / 6895), xLabel: "time (s)", yLabel: "psi", yFmt: (v) => fmt(v, 0),
   });
-
-  $("scrubber").max = d.time.length - 1;
-  setFrame(0);
 }
+
+// every JS-drawn surface picks its colours at draw time, so a theme
+// switch just means drawing everything again
+window.addEventListener("themechange", () => {
+  if (!project) return;
+  renderPropellantTab();
+  if (lastDesign) drawNozzleSection(lastDesign.geometry);
+  if (sim) {
+    renderSimCharts(sim);
+    setFrame(parseInt($("scrubber").value, 10) || 0);
+  }
+});
 
 // ----- grain animation -----
 
@@ -397,25 +414,27 @@ function drawFace(g, webMm) {
   const toPath = (poly) =>
     poly.map(([x, y], i) => `${i ? "L" : "M"}${(c + x * k).toFixed(2)},${(c + y * k).toFixed(2)}`).join("") + "Z";
 
+  const C = window.ibColor;
+  const VOID = C("draw-void"), OUTLINE = C("draw-outline");
   // burned region = initial void dilated by the web distance; a round-joined
   // stroke of width 2·web on the slit wedge is exactly that dilation
   const burnedSlits = slits.map((poly) =>
-    `<path d="${toPath(poly)}" fill="#141413" stroke="#141413" stroke-width="${2 * webMm * k}" stroke-linejoin="round" stroke-linecap="round"/>`).join("");
+    `<path d="${toPath(poly)}" fill="${VOID}" stroke="${VOID}" stroke-width="${2 * webMm * k}" stroke-linejoin="round" stroke-linecap="round"/>`).join("");
   const originalSlits = slits.map((poly) =>
-    `<path d="${toPath(poly)}" fill="none" stroke="#55534d" stroke-dasharray="3 4"/>`).join("");
+    `<path d="${toPath(poly)}" fill="none" stroke="${OUTLINE}" stroke-dasharray="3 4"/>`).join("");
 
   $("faceView").innerHTML = `
     <defs><clipPath id="grainClip"><circle cx="${c}" cy="${c}" r="${rGrain}"/></clipPath></defs>
-    <circle cx="${c}" cy="${c}" r="${rCase}" fill="#201f1e" stroke="#55534d" stroke-width="2"/>
+    <circle cx="${c}" cy="${c}" r="${rCase}" fill="${C("draw-case")}" stroke="${OUTLINE}" stroke-width="2"/>
     <circle cx="${c}" cy="${c}" r="${rGrain}" fill="rgba(57,135,229,0.25)" stroke="rgba(57,135,229,0.9)"/>
     <g clip-path="url(#grainClip)">
-      <circle cx="${c}" cy="${c}" r="${rCore}" fill="#141413"/>
+      <circle cx="${c}" cy="${c}" r="${rCore}" fill="${VOID}"/>
       ${burnedSlits}
-      <circle cx="${c}" cy="${c}" r="${(g.core_d_mm / 2) * k}" fill="none" stroke="#55534d" stroke-dasharray="3 4"/>
+      <circle cx="${c}" cy="${c}" r="${(g.core_d_mm / 2) * k}" fill="none" stroke="${OUTLINE}" stroke-dasharray="3 4"/>
       ${originalSlits}
     </g>
     <circle cx="${c}" cy="${c}" r="${rGrain}" fill="none" stroke="rgba(57,135,229,0.9)"/>
-    <text x="${c}" y="${S - 3}" fill="#8f8e84" font-size="10" text-anchor="middle">face view</text>`;
+    <text x="${c}" y="${S - 3}" fill="${C("ink-3")}" font-size="10" text-anchor="middle">face view</text>`;
 }
 
 // Analytic distance field for a plain BATES stack: per segment the nearest
@@ -453,7 +472,10 @@ function drawSection(g, webMm) {
   const cv = $("sectionView");
   const ctx = cv.getContext("2d");
   const W = cv.width, H = cv.height, padX = 34, padT = 14, padB = 30;
-  ctx.fillStyle = "#141413";
+  const C = window.ibColor;
+  const [brR, brG, brB] = window.ibColorRGB("draw-burned");
+  const [frR, frG, frB] = window.ibColorRGB("draw-front");
+  ctx.fillStyle = C("draw-void");
   ctx.fillRect(0, 0, W, H);
 
   const sec = (sim && sim.slit_section) || batesSection(g);
@@ -469,10 +491,10 @@ function drawSection(g, webMm) {
       if (d <= 0) {
         img.data[o + 3] = 0; // void from the start — panel background
       } else if (Math.abs(d - webMm) <= front) {
-        img.data[o] = 255; img.data[o + 1] = 255; img.data[o + 2] = 255;
+        img.data[o] = frR; img.data[o + 1] = frG; img.data[o + 2] = frB;
         img.data[o + 3] = 255;
       } else if (d < webMm) {
-        img.data[o] = 34; img.data[o + 1] = 31; img.data[o + 2] = 28;
+        img.data[o] = brR; img.data[o + 1] = brG; img.data[o + 2] = brB;
         img.data[o + 3] = 255; // burned
       } else {
         const t = Math.min(d / web_mm, 1); // late-burning = darker blue
@@ -497,10 +519,10 @@ function drawSection(g, webMm) {
   ctx.drawImage(off, x0, y0, dw, dh);
 
   // casing walls above and below, motor axis dashed through the middle
-  ctx.fillStyle = "#6f6d66";
+  ctx.fillStyle = C("draw-outline-2");
   ctx.fillRect(x0, y0 - 2, dw, 2);
   ctx.fillRect(x0, y0 + dh, dw, 2);
-  ctx.strokeStyle = "#55534d";
+  ctx.strokeStyle = C("draw-outline");
   ctx.setLineDash([7, 5]);
   ctx.beginPath();
   ctx.moveTo(x0 - 12, y0 + dh / 2);
@@ -508,14 +530,11 @@ function drawSection(g, webMm) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  ctx.fillStyle = "#8f8e84";
+  ctx.fillStyle = C("ink-3");
   ctx.font = "10px ui-monospace, Menlo, monospace";
   ctx.textAlign = "center";
-  const halves = g.slit_count > 0 ? " — top: between slits, bottom: through a slit" : "";
-  ctx.fillText(
-    `axial section${halves} · colour: burn order · white: front`,
-    W / 2, H - 8,
-  );
+  const halves = g.slit_count > 0 ? "top: between slits · bottom: through a slit" : "axial section";
+  ctx.fillText(`${halves} · colour: burn order · line: burn front`, W / 2, H - 8);
   ctx.textAlign = "left";
   ctx.fillText("fwd face", x0, y0 - 6);
   ctx.textAlign = "right";

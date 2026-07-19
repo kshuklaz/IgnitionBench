@@ -1,5 +1,6 @@
-// Minimal dark line chart: single series, recessive grid, hover crosshair
-// with tooltip, and an external time cursor for animation sync.
+// Minimal theme-aware line chart: single series, recessive grid, hover
+// crosshair with tooltip, and an external time cursor for animation sync.
+// Colours come from the CSS theme variables at draw time.
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -19,7 +20,9 @@ function el(name, attrs) {
   return node;
 }
 
-export function lineChart(container, { x, y, xLabel, yLabel, color = "#3987e5", yFmt = (v) => v.toFixed(1) }) {
+export function lineChart(container, { x, y, xLabel, yLabel, color, yFmt = (v) => v.toFixed(1) }) {
+  const C = window.ibColor;
+  color = color || C("accent");
   container.innerHTML = "";
   const W = 520, H = 240, padL = 52, padR = 14, padT = 12, padB = 34;
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}` });
@@ -31,22 +34,22 @@ export function lineChart(container, { x, y, xLabel, yLabel, color = "#3987e5", 
   const sy = (v) => H - padB - ((v - yMin) / (yMax - yMin)) * (H - padT - padB);
 
   for (const t of niceTicks(yMin, yMax)) {
-    svg.appendChild(el("line", { x1: padL, y1: sy(t), x2: W - padR, y2: sy(t), stroke: "#26251f", "stroke-width": 1 }));
-    const label = el("text", { x: padL - 8, y: sy(t) + 4, fill: "#8f8e84", "font-size": 11, "text-anchor": "end", "font-family": "ui-monospace,Menlo,monospace" });
+    svg.appendChild(el("line", { x1: padL, y1: sy(t), x2: W - padR, y2: sy(t), stroke: C("chart-grid"), "stroke-width": 1 }));
+    const label = el("text", { x: padL - 8, y: sy(t) + 4, fill: C("ink-3"), "font-size": 11, "text-anchor": "end", "font-family": "ui-monospace,Menlo,monospace" });
     label.textContent = yFmt(t);
     svg.appendChild(label);
   }
   for (const t of niceTicks(xMin, xMax, 5)) {
-    const label = el("text", { x: sx(t), y: H - padB + 18, fill: "#8f8e84", "font-size": 11, "text-anchor": "middle", "font-family": "ui-monospace,Menlo,monospace" });
+    const label = el("text", { x: sx(t), y: H - padB + 18, fill: C("ink-3"), "font-size": 11, "text-anchor": "middle", "font-family": "ui-monospace,Menlo,monospace" });
     label.textContent = t.toFixed(1);
     svg.appendChild(label);
   }
-  svg.appendChild(el("line", { x1: padL, y1: H - padB, x2: W - padR, y2: H - padB, stroke: "#3a3937", "stroke-width": 1 }));
+  svg.appendChild(el("line", { x1: padL, y1: H - padB, x2: W - padR, y2: H - padB, stroke: C("chart-axis"), "stroke-width": 1 }));
 
-  const xl = el("text", { x: (padL + W - padR) / 2, y: H - 4, fill: "#8f8e84", "font-size": 11, "text-anchor": "middle" });
+  const xl = el("text", { x: (padL + W - padR) / 2, y: H - 4, fill: C("ink-3"), "font-size": 11, "text-anchor": "middle" });
   xl.textContent = xLabel;
   svg.appendChild(xl);
-  const yl = el("text", { x: 12, y: (padT + H - padB) / 2, fill: "#8f8e84", "font-size": 11, "text-anchor": "middle", transform: `rotate(-90 12 ${(padT + H - padB) / 2})` });
+  const yl = el("text", { x: 12, y: (padT + H - padB) / 2, fill: C("ink-3"), "font-size": 11, "text-anchor": "middle", transform: `rotate(-90 12 ${(padT + H - padB) / 2})` });
   yl.textContent = yLabel;
   svg.appendChild(yl);
 
@@ -54,14 +57,14 @@ export function lineChart(container, { x, y, xLabel, yLabel, color = "#3987e5", 
   svg.appendChild(el("path", { d: path, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
 
   // animation cursor
-  const cursor = el("line", { x1: 0, y1: padT, x2: 0, y2: H - padB, stroke: "#c3c2b7", "stroke-width": 1, "stroke-dasharray": "3 3", visibility: "hidden" });
-  const cursorDot = el("circle", { r: 4, fill: color, stroke: "#1a1a19", "stroke-width": 2, visibility: "hidden" });
+  const cursor = el("line", { x1: 0, y1: padT, x2: 0, y2: H - padB, stroke: C("chart-cursor"), "stroke-width": 1, "stroke-dasharray": "3 3", visibility: "hidden" });
+  const cursorDot = el("circle", { r: 4, fill: color, stroke: C("surface"), "stroke-width": 2, visibility: "hidden" });
   svg.appendChild(cursor);
   svg.appendChild(cursorDot);
 
   // hover layer
-  const hoverLine = el("line", { x1: 0, y1: padT, x2: 0, y2: H - padB, stroke: "#55534d", "stroke-width": 1, visibility: "hidden" });
-  const hoverDot = el("circle", { r: 4.5, fill: color, stroke: "#1a1a19", "stroke-width": 2, visibility: "hidden" });
+  const hoverLine = el("line", { x1: 0, y1: padT, x2: 0, y2: H - padB, stroke: C("draw-outline"), "stroke-width": 1, visibility: "hidden" });
+  const hoverDot = el("circle", { r: 4.5, fill: color, stroke: C("surface"), "stroke-width": 2, visibility: "hidden" });
   svg.appendChild(hoverLine);
   svg.appendChild(hoverDot);
   const tip = document.createElement("div");

@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IgnitionBench — Projects</title>
+<script>
+document.documentElement.dataset.theme =
+  localStorage.getItem("ib-theme") ||
+  (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+</script>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
 </head>
@@ -11,16 +16,21 @@
 <header>
   <div class="brand">
     <div>
-      <img class="logo-full" src="{{ url_for('static', filename='logo-full.png') }}" alt="IgnitionBench">
+      <img class="logo-full" data-logo="{{ url_for('static', filename='logo-full.png') }}"
+           src="{{ url_for('static', filename='logo-full.png') }}" alt="IgnitionBench">
       <p>Solid rocket motor design studio</p>
     </div>
   </div>
-  <button class="btn primary" id="newProjectBtn">+ New project</button>
+  <div class="header-right">
+    <button class="btn theme-toggle" id="themeToggle" title="Switch theme">☀</button>
+    <button class="btn primary" id="newProjectBtn">+ New project</button>
+  </div>
 </header>
 
 <main class="home">
   <div class="empty-state" id="emptyState" hidden>
-    <img class="empty-logo" src="{{ url_for('static', filename='logo-full.png') }}" alt="">
+    <img class="empty-logo" data-logo="{{ url_for('static', filename='logo-full.png') }}"
+         src="{{ url_for('static', filename='logo-full.png') }}" alt="">
     <h2>No projects yet</h2>
     <p>Start your first motor — pick a propellant, shape the grain, and watch it burn.</p>
     <button class="btn primary" id="emptyNewBtn">Start your first motor</button>
@@ -40,6 +50,7 @@
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='theme.js') }}"></script>
 <script src="{{ url_for('static', filename='home.js') }}"></script>
 </body>
 </html>

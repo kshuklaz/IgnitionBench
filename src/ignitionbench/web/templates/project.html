@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IgnitionBench — Designer</title>
+<script>
+document.documentElement.dataset.theme =
+  localStorage.getItem("ib-theme") ||
+  (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+</script>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
 <script type="importmap">
@@ -14,13 +19,15 @@
 <header>
   <div class="brand">
     <a class="back" href="/" title="All projects">‹</a>
-    <img class="logo" src="{{ url_for('static', filename='logo-mark.png') }}" alt="">
+    <img class="logo" data-logo="{{ url_for('static', filename='logo-mark.png') }}"
+         src="{{ url_for('static', filename='logo-mark.png') }}" alt="">
     <div>
       <h1 id="projectName" contenteditable="true" spellcheck="false">…</h1>
       <p><span id="saveState" class="save-state">Saved</span></p>
     </div>
   </div>
   <div class="header-right">
+    <button class="btn theme-toggle" id="themeToggle" title="Switch theme">☀</button>
     <div class="cert-chip" id="certChip" hidden></div>
     <div class="class-badge" id="classBadge" title="NAR/TRA impulse class">—</div>
   </div>
@@ -199,6 +206,7 @@
 </main>
 
 <script>window.PROJECT_ID = {{ project_id | tojson }};</script>
+<script src="{{ url_for('static', filename='theme.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='project.js') }}"></script>
 </body>
 </html>
