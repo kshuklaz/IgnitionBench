@@ -50,6 +50,34 @@ Then open http://localhost:8000 — a dark design studio:
 - **Step 3 · Simulation** — burn-regression simulator with an animated grain
   (face + side views, play/scrub), thrust and chamber-pressure curves with a
   synced time cursor, and delivered performance numbers.
+- **Step 4 · Review** — the AI mentor reads the full design and writes a
+  safety review: every warning explained in plain language, hazards the
+  calculators don't model, and recommended next steps.
+- **✦ AI mentor** — a chat drawer on every page. In a project it sees your
+  live geometry and computed results, answers questions about them, and can
+  edit the design on request — every AI edit passes through the same
+  validation pipeline as the forms, so an unsafe or invalid design is
+  rejected and never saved. It never provides propellant formulations,
+  ignition compositions, or go/no-go sign-offs — that authority stays with
+  your certified RSO or mentor.
+
+## AI setup (optional)
+
+Everything except the AI mentor and the Review tab works offline with no
+account. The AI features call the Claude API and need a key:
+
+1. Create a key at [console.anthropic.com](https://console.anthropic.com)
+   (Settings → API Keys) and add a few dollars of billing credit.
+2. Export it in the environment where the server runs, then start the app:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+python -m ignitionbench.web
+```
+
+Never commit the key. Without it the app runs normally and the AI surfaces
+show a setup notice. Default model is Claude Opus 4.8; override with
+`IGNITIONBENCH_AI_MODEL`.
 
 ## Quickstart
 
@@ -86,7 +114,8 @@ src/ignitionbench/
   propellant/   # Pillar 1 — APCP database, Kn/pressure calculator
   nozzle/       # Pillar 2 — de Laval nozzle formula engine
   simulation/   # Pillar 3 — 3D grain modeling, burn regression, flight sim
-  ai/           # Claude API assistant, safety checks, context injection
+  export/       # STL export
+  web/          # Flask design studio + AI mentor (web/ai.py, Claude API)
 tests/
 ```
 
