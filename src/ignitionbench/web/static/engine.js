@@ -1,6 +1,7 @@
 // Propellant Engine: Plan (ingredients + characterize/save), Prepare (safety +
-// notes), Cast (grain geometry + AutoCast). Custom propellants saved here show
-// up in every project's propellant menu.
+// notes), Characterization (fit a/n from measured test burns), Cast (grain
+// geometry + AutoCast). Custom propellants saved here show up in every
+// project's propellant menu.
 
 const $ = (id) => document.getElementById(id);
 const fmt = (x, d = 1) =>
@@ -62,14 +63,18 @@ function renderMarkdown(md) {
 
 // ---------- tabs ----------
 
+const TAB_NAMES = ["plan", "prepare", "char", "cast"];
+
+function showTab(name) {
+  document.querySelectorAll(".steps .step").forEach((b) =>
+    b.classList.toggle("active", b.dataset.tab === name));
+  for (const t of TAB_NAMES) $(`tab-${t}`).hidden = t !== name;
+  if (name === "cast") runCastDesign();
+  if (name === "char") updateCharSkip();
+}
+
 document.querySelectorAll(".steps .step").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".steps .step").forEach((b) => b.classList.toggle("active", b === btn));
-    for (const name of ["plan", "prepare", "cast"]) {
-      $(`tab-${name}`).hidden = name !== btn.dataset.tab;
-    }
-    if (btn.dataset.tab === "cast") runCastDesign();
-  });
+  btn.addEventListener("click", () => showTab(btn.dataset.tab));
 });
 
 // ---------- Plan: ingredients ----------
@@ -239,6 +244,164 @@ async function savePrep() {
   await loadCatalog();
 }
 
+// ---------- Characterization: fit a/n from measured test burns ----------
+
+const CHAR_STORE = "ib-char-points";
+
+function addCharRow(pt = {}) {
+  const row = document.createElement("div");
+  row.className = "char-row";
+  row.innerHTML = `
+    <input class="char-p" type="number" min="0.01" step="0.05" placeholder="e.g. 3.5" value="${pt.p ?? ""}">
+    <input class="char-r" type="number" min="0.01" step="0.1" placeholder="e.g. 9.2" value="${pt.r ?? ""}">
+    <button class="icon-btn ing-del" title="Remove" data-tip="Remove this test burn">✕</button>`;
+  row.querySelector(".ing-del").addEventListener("click", () => { row.remove(); refitChar(); });
+  row.querySelectorAll("input").forEach((i) => i.addEventListener("input", debounce(refitChar, 250)));
+  $("charRows").appendChild(row);
+}
+
+function collectCharPoints() {
+  return [...document.querySelectorAll(".char-row")]
+    .map((row) => ({
+      p: parseFloat(row.querySelector(".char-p").value),
+      r: parseFloat(row.querySelector(".char-r").value),
+    }))
+    .filter((pt) => pt.p > 0 && pt.r > 0);
+}
+
+// least-squares fit of ln r = ln a + n·ln P
+function fitChar(points) {
+  if (points.length < 3) return null;
+  const lx = points.map((pt) => Math.log(pt.p));
+  const ly = points.map((pt) => Math.log(pt.r));
+  const N = points.length;
+  const mx = lx.reduce((s, v) => s + v, 0) / N;
+  const my = ly.reduce((s, v) => s + v, 0) / N;
+  let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < N; i++) {
+    sxy += (lx[i] - mx) * (ly[i] - my);
+    sxx += (lx[i] - mx) ** 2;
+    syy += (ly[i] - my) ** 2;
+  }
+  if (sxx === 0) return null; // all burns at the same pressure
+  const n = sxy / sxx;
+  const a = Math.exp(my - n * mx);
+  const r2 = syy === 0 ? 1 : (sxy * sxy) / (sxx * syy);
+  const ps = points.map((pt) => pt.p);
+  return { a, n, r2, pmin: Math.min(...ps), pmax: Math.max(...ps) };
+}
+
+let charFitResult = null;
+
+function refitChar() {
+  const points = collectCharPoints();
+  localStorage.setItem(CHAR_STORE, JSON.stringify(points));
+  const fit = fitChar(points);
+  charFitResult = null;
+  const table = $("charFit");
+  const msg = $("charMsg");
+  drawCharChart(points, fit);
+  if (!fit) {
+    table.innerHTML = "";
+    msg.textContent = points.length
+      ? "Add at least 3 burns at different pressures to fit a and n."
+      : "";
+    $("charToPlan").disabled = true;
+    return;
+  }
+  table.innerHTML = `
+    <tr><td>a — burn coeff</td><td>${fmt(fit.a, 3)} mm/s at MPa</td></tr>
+    <tr><td>n — exponent</td><td>${fmt(fit.n, 3)}</td></tr>
+    <tr><td>R² of fit</td><td>${fmt(fit.r2, 3)}</td></tr>
+    <tr><td>Validated range</td><td>${fmt(fit.pmin, 2)}–${fmt(fit.pmax, 2)} MPa (${fmt(fit.pmin * 145, 0)}–${fmt(fit.pmax * 145, 0)} psi)</td></tr>`;
+  const problems = [];
+  if (!(fit.n > 0 && fit.n < 1)) {
+    problems.push(`n = ${fmt(fit.n, 3)} is outside 0–1 — solid propellants don't behave like this; re-check your pressure and rate measurements.`);
+  }
+  if (fit.r2 < 0.9) {
+    problems.push("R² is low — the points scatter badly. Repeat the outliers before trusting this fit.");
+  }
+  if (fit.pmax / fit.pmin < 1.5) {
+    problems.push("Your burns cover a narrow pressure range — the fit only holds inside it. Test wider if your motor will run outside.");
+  }
+  msg.textContent = problems.length ? `⚠ ${problems.join(" ")}` : "Good fit. Send it to Plan to finish characterizing.";
+  charFitResult = fit;
+  $("charToPlan").disabled = !(fit.n > 0 && fit.n < 1);
+}
+
+function drawCharChart(points, fit) {
+  const box = $("charChart");
+  if (!points.length) {
+    box.innerHTML = `<p class="footnote">Your test points plot here as you enter them.</p>`;
+    return;
+  }
+  const W = 340, H = 190, L = 40, R = 12, T = 12, B = 28;
+  const ps = points.map((pt) => pt.p), rs = points.map((pt) => pt.r);
+  const pad = (lo, hi) => { const d = (hi - lo) || hi * 0.4 || 1; return [Math.max(lo - d * 0.15, 0), hi + d * 0.15]; };
+  const [x0, x1] = pad(Math.min(...ps), Math.max(...ps));
+  const [y0, y1] = pad(Math.min(...rs), Math.max(...rs));
+  const X = (p) => L + ((p - x0) / (x1 - x0)) * (W - L - R);
+  const Y = (r) => H - B - ((r - y0) / (y1 - y0)) * (H - T - B);
+  let curve = "";
+  if (fit) {
+    const steps = 40;
+    curve = [...Array(steps + 1)]
+      .map((_, i) => {
+        const p = x0 + ((x1 - x0) * i) / steps;
+        return `${X(p).toFixed(1)},${Y(fit.a * Math.pow(Math.max(p, 1e-6), fit.n)).toFixed(1)}`;
+      })
+      .join(" ");
+  }
+  box.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Burn rate vs pressure">
+    <line x1="${L}" y1="${H - B}" x2="${W - R}" y2="${H - B}" stroke="var(--chart-axis)" stroke-width="1"/>
+    <line x1="${L}" y1="${T}" x2="${L}" y2="${H - B}" stroke="var(--chart-axis)" stroke-width="1"/>
+    ${curve ? `<polyline points="${curve}" fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.85"/>` : ""}
+    ${points.map((pt) => `<circle cx="${X(pt.p).toFixed(1)}" cy="${Y(pt.r).toFixed(1)}" r="4" fill="var(--ink)" stroke="var(--surface)" stroke-width="1.5"/>`).join("")}
+    <text x="${L - 6}" y="${Y(y1).toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="10" fill="var(--ink-3)">${fmt(y1, 1)}</text>
+    <text x="${L - 6}" y="${Y(y0).toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="10" fill="var(--ink-3)">${fmt(y0, 1)}</text>
+    <text x="${X(x0).toFixed(1)}" y="${H - B + 14}" text-anchor="middle" font-size="10" fill="var(--ink-3)">${fmt(x0, 1)}</text>
+    <text x="${X(x1).toFixed(1)}" y="${H - B + 14}" text-anchor="middle" font-size="10" fill="var(--ink-3)">${fmt(x1, 1)}</text>
+    <text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle" font-size="10" fill="var(--ink-3)">P — MPa</text>
+    <text x="12" y="${(T + H - B) / 2}" text-anchor="middle" font-size="10" fill="var(--ink-3)" transform="rotate(-90 12 ${(T + H - B) / 2})">r — mm/s</text>
+  </svg>`;
+}
+
+function sendCharToPlan() {
+  if (!charFitResult) return;
+  $("p_a_mm_mpa").value = charFitResult.a.toFixed(3);
+  $("p_n").value = charFitResult.n.toFixed(3);
+  $("p_min_mpa").value = charFitResult.pmin.toFixed(2);
+  $("p_max_mpa").value = charFitResult.pmax.toFixed(2);
+  document.querySelector('#sourceMode .seg[data-src="own"]').click();
+  showTab("plan");
+  $("saveMsg").textContent =
+    "Fitted a/n and pressure range loaded — add density, γ, flame temp, and molar mass, then save.";
+}
+
+// a/n are already established when the user starts from a published baseline
+function updateCharSkip() {
+  const skip = $("charSkip");
+  if (sourceMode() === "base") {
+    const name = catalog[$("p_base").value]?.name || "a published propellant";
+    skip.hidden = false;
+    skip.textContent =
+      `Your Plan tab starts from ${name}, whose a and n are already established ` +
+      `from published test data — you can skip this tab. Characterize only when ` +
+      `you're entering your own a/n data for your own batch.`;
+  } else {
+    skip.hidden = true;
+  }
+}
+
+function loadCharRows() {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(CHAR_STORE)) || []; } catch { /* fresh start */ }
+  if (saved.length) saved.forEach((pt) => addCharRow(pt));
+  else for (let i = 0; i < 3; i++) addCharRow();
+  refitChar();
+}
+
 // ---------- Cast ----------
 
 function castGrain() {
@@ -398,6 +561,8 @@ document.querySelectorAll("#sourceMode .seg").forEach((btn) => {
 });
 
 $("addIngredient").addEventListener("click", () => addIngredientRow());
+$("addCharRow").addEventListener("click", () => addCharRow());
+$("charToPlan").addEventListener("click", sendCharToPlan);
 $("p_base").addEventListener("change", fillBaseMeta);
 $("saveProp").addEventListener("click", saveProp);
 $("prepProp").addEventListener("change", loadPrepNotes);
@@ -416,4 +581,5 @@ addIngredientRow();
 addIngredientRow();
 updatePctTotal();
 renderSafetyCheck();
+loadCharRows();
 loadCatalog();

@@ -868,3 +868,22 @@ textarea:focus { outline: none; border-color: var(--accent); }
 .res-list a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .res-list a:hover { text-decoration: underline; }
 .res-list em { color: var(--ink); font-style: italic; }
+
+/* Characterization tab */
+.char-head, .char-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 28px;
+  gap: 8px;
+  align-items: center;
+}
+.char-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--ink-3);
+  margin: 10px 0 6px;
+}
+.char-row { margin-bottom: 8px; }
+.char-row input { margin-top: 0; }
+.char-chart { margin: 6px 0 10px; }
+.char-chart svg { width: 100%; height: auto; display: block; }

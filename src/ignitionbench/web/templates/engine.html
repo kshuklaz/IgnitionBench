@@ -20,7 +20,7 @@ document.documentElement.dataset.theme =
          src="{{ url_for('static', filename='logo-mark.png') }}" alt="">
     <div>
       <h1>Propellant Engine</h1>
-      <p>Plan · Prepare · Cast</p>
+      <p>Plan · Prepare · Characterize · Cast</p>
     </div>
   </div>
   <div class="header-right">
@@ -31,7 +31,8 @@ document.documentElement.dataset.theme =
 <nav class="steps">
   <button class="step active" data-tab="plan" data-tip="List your ingredients and choose how the propellant should burn"><span class="step-num">1</span> Plan</button>
   <button class="step" data-tab="prepare" data-tip="Safety checklist and your own preparation notes"><span class="step-num">2</span> Prepare</button>
-  <button class="step" data-tab="cast" data-tip="Shape the grain — or let AutoCast design it for your goal"><span class="step-num">3</span> Cast</button>
+  <button class="step" data-tab="char" data-tip="Fit a and n from your own measured test burns — skip if your baseline's a/n are already established"><span class="step-num">3</span> Characterization</button>
+  <button class="step" data-tab="cast" data-tip="Shape the grain — or let AutoCast design it for your goal"><span class="step-num">4</span> Cast</button>
 </nav>
 
 <main class="designer">
@@ -63,7 +64,7 @@ document.documentElement.dataset.theme =
         </div>
         <p class="footnote">Ingredient percentages are your documentation. Burn-rate
         numbers (a, n, …) can't be guessed from a recipe — start from a published
-        propellant below, or enter your own strand-burner data.</p>
+        propellant below, or measure your own in the ③ Characterization tab.</p>
       </div>
 
       <div class="panel">
@@ -96,6 +97,9 @@ document.documentElement.dataset.theme =
             <label>Valid from <span class="unit">MPa</span><input id="p_min_mpa" type="number" step="0.1" min="0.01"></label>
             <label>Valid to <span class="unit">MPa</span><input id="p_max_mpa" type="number" step="0.1" min="0.1"></label>
           </div>
+          <p class="footnote">Making your own propellant means running a
+          characterization test — the ③ Characterization tab fits a and n from
+          your measured burns and fills these fields for you.</p>
         </div>
 
         <label class="lbl">Source / provenance
@@ -145,7 +149,54 @@ document.documentElement.dataset.theme =
     </div>
   </section>
 
-  <!-- ============ TAB 3 : CAST ============ -->
+  <!-- ============ TAB 3 : CHARACTERIZATION ============ -->
+  <section class="tab" id="tab-char" hidden>
+    <div class="banner" role="note">
+      <strong>Characterization is live-fire testing.</strong> a and n come from
+      measuring real burns — a strand burner or a small instrumented test motor —
+      under a certified mentor or RSO at a legal test site, with remote ignition
+      and the smallest samples that give data. IgnitionBench fits the numbers;
+      the testing discipline is yours. Never scale up an uncharacterized batch.
+    </div>
+    <div class="banner soft" id="charSkip" hidden></div>
+
+    <div class="tab-grid">
+      <div class="panel">
+        <h2>Test burns</h2>
+        <p class="footnote">One row per burn: the pressure it burned at and the
+        measured burn rate (sample length ÷ burn time). Spread points across the
+        pressure range you plan to operate in — at least 3 burns for a fit.</p>
+        <div class="char-head">
+          <span>Pressure <span class="unit">MPa</span></span>
+          <span>Burn rate <span class="unit">mm/s</span></span>
+          <span></span>
+        </div>
+        <div id="charRows"></div>
+        <div class="ingredient-foot">
+          <button class="btn small" id="addCharRow" data-tip="Add a test-burn row">+ Add test burn</button>
+        </div>
+        <p class="footnote">1 MPa ≈ 145 psi. Richard Nakka's strand-burner
+        articles (see 📚 Resources on the home page) cover how these tests are
+        run and instrumented.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Fit r = a·Pⁿ</h2>
+        <div class="char-chart" id="charChart"></div>
+        <table class="spec" id="charFit"></table>
+        <div class="footnote" id="charMsg"></div>
+        <div class="save-row">
+          <button class="btn primary" id="charToPlan" disabled
+            data-tip="Copy the fitted a, n, and validated pressure range into Plan's own-data form">Use in Plan →</button>
+        </div>
+        <p class="footnote">The fit gives a, n, and the pressure range your data
+        validates. Density, γ, flame temp, and molar mass still come from
+        published thermochemistry for your formulation — fill those in Plan.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 4 : CAST ============ -->
   <section class="tab" id="tab-cast" hidden>
     <div class="banner" id="castError" hidden></div>
 
