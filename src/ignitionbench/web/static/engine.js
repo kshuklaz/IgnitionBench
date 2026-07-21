@@ -303,7 +303,7 @@ async function runAutocast() {
   }
   $("autocastBtn").disabled = true;
   status.hidden = false;
-  status.textContent = "The mentor is designing a grain for your goal…";
+  status.textContent = "Delta is designing a grain for your goal…";
   body.innerHTML = "";
   $("applyCast").hidden = true;
   castProposal = null;

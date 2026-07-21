@@ -6,7 +6,7 @@
 AI-powered rocket motor design software for hobbyist rocketeers.
 
 IgnitionBench combines accurate solid-propellant rocket science with plain-language
-guidance and an AI mentor, so a NAR/TRA Level 1 hobbyist without an engineering
+guidance and an AI mentor named Delta, so a NAR/TRA Level 1 hobbyist without an engineering
 degree can design their first solid motor safely.
 
 ## Product pillars
@@ -50,10 +50,10 @@ Then open http://localhost:8000 — a dark design studio:
 - **Step 3 · Simulation** — burn-regression simulator with an animated grain
   (face + side views, play/scrub), thrust and chamber-pressure curves with a
   synced time cursor, and delivered performance numbers.
-- **Step 4 · Review** — the AI mentor reads the full design and writes a
+- **Step 4 · Review** — Delta reads the full design and writes a
   safety review: every warning explained in plain language, hazards the
   calculators don't model, and recommended next steps.
-- **✦ AI mentor** — a chat drawer on every page. In a project it sees your
+- **✦ Delta** — the AI mentor, a chat drawer on every page. In a project it sees your
   live geometry and computed results, answers questions about them, and can
   edit the design on request — every AI edit passes through the same
   validation pipeline as the forms, so an unsafe or invalid design is
@@ -63,7 +63,7 @@ Then open http://localhost:8000 — a dark design studio:
 
 ## AI setup (optional)
 
-Everything except the AI mentor and the Review tab works offline with no
+Everything except Delta (the AI mentor) and the Review tab works offline with no
 account. The AI features call the Claude API and need a key:
 
 1. Create a key at [console.anthropic.com](https://console.anthropic.com)

@@ -65,7 +65,7 @@
   }
 
   const NOT_CONFIGURED =
-    "The AI mentor needs a Claude API key. Set <code>ANTHROPIC_API_KEY</code> " +
+    "Delta needs a Claude API key. Set <code>ANTHROPIC_API_KEY</code> " +
     "in the environment and restart the server (<code>python -m ignitionbench.web</code>).";
 
   async function ensureStatus() {
@@ -129,7 +129,7 @@
       pending.classList.remove("pending");
       pending.innerHTML = renderMarkdown(d.reply);
       if (d.updated && d.project) {
-        addMessage("assistant", "✏️ The mentor updated your design — the forms and results have refreshed.", "notice");
+        addMessage("assistant", "✏️ Delta updated your design — the forms and results have refreshed.", "notice");
         window.dispatchEvent(new CustomEvent("ai-project-updated", { detail: d.project }));
       }
     } catch (err) {
@@ -171,7 +171,7 @@
     reviewRan = true;
     $("reviewBtn").disabled = true;
     note.hidden = false;
-    note.textContent = "The mentor is reviewing your project — this takes a moment…";
+    note.textContent = "Delta is reviewing your project — this takes a moment…";
     try {
       const res = await fetch("/api/ai/review", {
         method: "POST",
