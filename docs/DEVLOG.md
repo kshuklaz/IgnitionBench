@@ -5,6 +5,37 @@ the change, why it exists, and the commits behind it.
 
 ---
 
+## Devlog 001
+
+Alright everyone - this is devlog 001 of
+[IgnitionBench](https://github.com/kshuklaz/IgnitionBench), an AI-assisted rocket
+motor design tool that lets people of any skill level design their first rocket
+motor.
+
+Highlights this cycle:
+
+- **Delta, a new AI assistant.** Delta guides you step by step through designing
+  your first rocket motor as safely as possible.
+- **The Propellant Engine.** A section dedicated entirely to making propellant
+  and test-firing it to measure the a and n burn-rate values for your own batch.
+  **Delta will not walk you through actually making the propellant - you should
+  have an expert with you at all times and never trust an app for that step.**
+  Instead there is a safety checklist and a notepad to mark off your steps.
+- **AutoCast (on the Cast step).** Tell Delta how you want the rocket to fly and
+  AutoCast proposes the best grain geometry to cast for your propellant; you
+  approve it before it is applied. (This is about grain shape only - Delta never
+  formulates the propellant itself.)
+- **Resources button** on the home screen, as a citation/source list.
+- **Light mode** theme added to the UI.
+
+Delta needs an Anthropic API key to run. Aside from the AI features,
+IgnitionBench works completely offline.
+
+**Maybe coming next:** sound effects, and a plugin system so people can build
+their own plugins for IgnitionBench.
+
+---
+
 ## 2026-07 - The Propellant Engine
 
 A dedicated workspace for developing your own propellant, separate from the motor
