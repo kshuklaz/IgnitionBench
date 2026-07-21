@@ -138,6 +138,8 @@ def catalog() -> dict:
                 "ingredients": record.get("ingredients", []),
                 "source": record.get("source", ""),
                 "prepare_notes": record.get("prepare_notes", ""),
+                "created": record.get("created", 0),
+                "updated": record.get("updated", 0),
             },
         )
     return out

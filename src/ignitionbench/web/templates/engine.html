@@ -20,247 +20,278 @@ document.documentElement.dataset.theme =
          src="{{ url_for('static', filename='logo-mark.png') }}" alt="">
     <div>
       <h1>Propellant Engine</h1>
-      <p>Plan · Prepare · Characterize · Cast</p>
+      <p>Design, characterize, and cast your own propellants</p>
     </div>
   </div>
   <div class="header-right">
     <button class="btn theme-toggle" id="themeToggle" data-tip="Switch between light and dark mode">☀</button>
+    <button class="btn primary" id="newPropTop" data-tip="Start a new propellant">+ New propellant</button>
   </div>
 </header>
 
-<nav class="steps">
-  <button class="step active" data-tab="plan" data-tip="List your ingredients and choose how the propellant should burn"><span class="step-num">1</span> Plan</button>
-  <button class="step" data-tab="prepare" data-tip="Safety checklist and your own preparation notes"><span class="step-num">2</span> Prepare</button>
-  <button class="step" data-tab="char" data-tip="Fit a and n from your own measured test burns — skip if your baseline's a/n are already established"><span class="step-num">3</span> Characterization</button>
-  <button class="step" data-tab="cast" data-tip="Shape the grain — or let AutoCast design it for your goal"><span class="step-num">4</span> Cast</button>
-</nav>
+<!-- ============ GALLERY (like the projects home) ============ -->
+<main class="gallery" id="engineGallery">
+  <div class="empty-state" id="emptyState" hidden>
+    <img class="empty-logo" data-logo="{{ url_for('static', filename='logo-full.png') }}"
+         src="{{ url_for('static', filename='logo-full.png') }}" alt="">
+    <h2>No propellants yet</h2>
+    <p>Create your first propellant — start from a published baseline or your own
+    strand-burner data, then prepare, cast, and characterize it.</p>
+    <button class="btn primary" id="emptyNewBtn">Create your first propellant</button>
+  </div>
+  <div class="project-grid" id="propGrid"></div>
+</main>
 
-<main class="designer">
+<!-- ============ WORKSPACE (one propellant, four tabs) ============ -->
+<div id="engineWorkspace" hidden>
+  <div class="ws-head">
+    <button class="back-link" id="backToGallery" data-tip="Back to all propellants">‹ All propellants</button>
+    <h2 id="wsName">Propellant</h2>
+    <span class="ws-sub" id="wsSub"></span>
+  </div>
 
-  <!-- ============ TAB 1 : PLAN ============ -->
-  <section class="tab" id="tab-plan">
-    <div class="banner soft" role="note">
-      This is your recipe notebook. IgnitionBench records the ingredients
-      <strong>you</strong> bring from published sources or your mentor, and helps
-      you characterize the burn — it does not invent formulations, ratios, or
-      mixing procedures. Ask ✦ Delta to talk through <em>which</em> published
-      propellant fits your goal.
-    </div>
+  <nav class="steps">
+    <button class="step active" data-tab="plan" data-tip="List your ingredients and choose how the propellant should burn"><span class="step-num">1</span> Plan</button>
+    <button class="step" data-tab="prepare" data-tip="Safety checklist and your own preparation notes"><span class="step-num">2</span> Prepare</button>
+    <button class="step" data-tab="cast" data-tip="Shape the grain — or let AutoCast design it for your goal"><span class="step-num">3</span> Cast</button>
+    <button class="step" data-tab="char" data-tip="Fit a and n from your own measured test burns — skip if your baseline's a/n are already established"><span class="step-num">4</span> Characterization</button>
+  </nav>
 
-    <div class="tab-grid">
-      <div class="panel">
-        <h2>Ingredients</h2>
-        <label class="lbl">How do you want it to burn?
-          <textarea id="p_goal" rows="2" placeholder="e.g. slow and steady for a long J burn, low smoke…"></textarea>
-        </label>
+  <main class="designer">
 
-        <div class="ingredient-head">
-          <span>Ingredient</span><span>Role</span><span>%</span><span></span>
-        </div>
-        <div id="ingredientRows"></div>
-        <div class="ingredient-foot">
-          <button class="btn small" id="addIngredient" data-tip="Add an ingredient row">+ Add ingredient</button>
-          <span class="pct-total" id="pctTotal">0%</span>
-        </div>
-        <p class="footnote">Ingredient percentages are your documentation. Burn-rate
-        numbers (a, n, …) can't be guessed from a recipe — start from a published
-        propellant below, or measure your own in the ③ Characterization tab.</p>
+    <!-- ============ TAB 1 : PLAN ============ -->
+    <section class="tab" id="tab-plan">
+      <div class="banner soft" role="note">
+        This is your recipe notebook. IgnitionBench records the ingredients
+        <strong>you</strong> bring from published sources or your mentor, and helps
+        you characterize the burn — it does not invent formulations, ratios, or
+        mixing procedures. Ask ✦ Delta to talk through <em>which</em> published
+        propellant fits your goal.
       </div>
 
-      <div class="panel">
-        <h2>Characterize &amp; save</h2>
-        <label class="lbl">Propellant name
-          <input id="p_name" type="text" maxlength="60" placeholder="e.g. My 65/35 KNSB batch">
-        </label>
-
-        <label class="lbl">Burn-rate source</label>
-        <div class="segmented" id="sourceMode">
-          <button class="seg active" data-src="base" data-tip="Use a published propellant's measured burn data">Start from published</button>
-          <button class="seg" data-src="own" data-tip="Enter your own a and n from strand-burner tests">My own a/n data</button>
-        </div>
-
-        <div id="baseForm">
-          <label class="lbl">Published baseline
-            <select id="p_base" data-tip="Your propellant will burn like this characterized propellant"></select>
+      <div class="tab-grid">
+        <div class="panel">
+          <h2>Ingredients</h2>
+          <label class="lbl">How do you want it to burn?
+            <textarea id="p_goal" rows="2" placeholder="e.g. slow and steady for a long J burn, low smoke…"></textarea>
           </label>
-          <table class="spec" id="baseMeta"></table>
-        </div>
 
-        <div id="ownForm" hidden>
-          <div class="field-grid">
-            <label>a — burn coeff <span class="unit">mm/s at MPa</span><input id="p_a_mm_mpa" type="number" step="0.01" min="0.01"></label>
-            <label>n — exponent <input id="p_n" type="number" step="0.01" min="0.01" max="0.99"></label>
-            <label>Density <span class="unit">kg/m³</span><input id="p_density" type="number" step="1" min="1"></label>
-            <label>γ — exhaust <input id="p_gamma" type="number" step="0.001" min="1.01"></label>
-            <label>Flame temp <span class="unit">K</span><input id="p_temp_k" type="number" step="10" min="300"></label>
-            <label>Molar mass <span class="unit">g/mol</span><input id="p_molar_g" type="number" step="0.1" min="1"></label>
-            <label>Valid from <span class="unit">MPa</span><input id="p_min_mpa" type="number" step="0.1" min="0.01"></label>
-            <label>Valid to <span class="unit">MPa</span><input id="p_max_mpa" type="number" step="0.1" min="0.1"></label>
+          <div class="ingredient-head">
+            <span>Ingredient</span><span>Role</span><span>%</span><span></span>
           </div>
-          <p class="footnote">Making your own propellant means running a
-          characterization test — the ③ Characterization tab fits a and n from
-          your measured burns and fills these fields for you.</p>
-        </div>
-
-        <label class="lbl">Source / provenance
-          <input id="p_source" type="text" maxlength="200" placeholder="e.g. Nakka published KNSB; mentor-supervised batch">
-        </label>
-
-        <div class="save-row">
-          <button class="btn primary" id="saveProp" data-tip="Save this propellant — it appears in every project's menu">Save propellant</button>
-          <span class="footnote" id="saveMsg"></span>
-        </div>
-
-        <h3 class="mini-h">Your propellants</h3>
-        <div id="myProps" class="my-props"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ TAB 2 : PREPARE ============ -->
-  <section class="tab" id="tab-prepare" hidden>
-    <div class="banner" role="note">
-      <strong>Preparation is the dangerous step.</strong> Mixing energetic materials
-      is done under a certified mentor or RSO — never from an app. IgnitionBench
-      gives you a safety checklist and a place to record <em>your</em> process; it
-      will not provide a mixing or casting procedure.
-    </div>
-
-    <div class="tab-grid">
-      <div class="panel">
-        <h2>Safety checklist</h2>
-        <ul class="safety-check" id="safetyCheck"></ul>
-        <p class="footnote">General practice, not a substitute for hands-on
-        mentorship and your local range's rules. Ask ✦ Delta about any item.</p>
-      </div>
-
-      <div class="panel">
-        <h2>Your preparation notes</h2>
-        <label class="lbl">For which propellant?
-          <select id="prepProp" data-tip="Notes are saved onto this saved propellant"></select>
-        </label>
-        <textarea id="prepNotes" rows="12"
-          placeholder="Record the steps, order, cure times, tooling, and safety measures from your mentor or published source…"></textarea>
-        <div class="save-row">
-          <button class="btn" id="savePrep" data-tip="Save these notes onto the selected propellant">Save notes</button>
-          <span class="footnote" id="prepMsg"></span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ TAB 3 : CHARACTERIZATION ============ -->
-  <section class="tab" id="tab-char" hidden>
-    <div class="banner" role="note">
-      <strong>Characterization is live-fire testing.</strong> a and n come from
-      measuring real burns — a strand burner or a small instrumented test motor —
-      under a certified mentor or RSO at a legal test site, with remote ignition
-      and the smallest samples that give data. IgnitionBench fits the numbers;
-      the testing discipline is yours. Never scale up an uncharacterized batch.
-    </div>
-    <div class="banner soft" id="charSkip" hidden></div>
-
-    <div class="tab-grid">
-      <div class="panel">
-        <h2>Test burns</h2>
-        <p class="footnote">One row per burn: the pressure it burned at and the
-        measured burn rate (sample length ÷ burn time). Spread points across the
-        pressure range you plan to operate in — at least 3 burns for a fit.</p>
-        <div class="char-head">
-          <span>Pressure <span class="unit">MPa</span></span>
-          <span>Burn rate <span class="unit">mm/s</span></span>
-          <span></span>
-        </div>
-        <div id="charRows"></div>
-        <div class="ingredient-foot">
-          <button class="btn small" id="addCharRow" data-tip="Add a test-burn row">+ Add test burn</button>
-        </div>
-        <p class="footnote">1 MPa ≈ 145 psi. Richard Nakka's strand-burner
-        articles (see 📚 Resources on the home page) cover how these tests are
-        run and instrumented.</p>
-      </div>
-
-      <div class="panel">
-        <h2>Fit r = a·Pⁿ</h2>
-        <div class="char-chart" id="charChart"></div>
-        <table class="spec" id="charFit"></table>
-        <div class="footnote" id="charMsg"></div>
-        <div class="save-row">
-          <button class="btn primary" id="charToPlan" disabled
-            data-tip="Copy the fitted a, n, and validated pressure range into Plan's own-data form">Use in Plan →</button>
-        </div>
-        <p class="footnote">The fit gives a, n, and the pressure range your data
-        validates. Density, γ, flame temp, and molar mass still come from
-        published thermochemistry for your formulation — fill those in Plan.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ TAB 4 : CAST ============ -->
-  <section class="tab" id="tab-cast" hidden>
-    <div class="banner" id="castError" hidden></div>
-
-    <div class="tab-grid motor-grid">
-      <div class="panel inputs">
-        <h2>Grain &amp; nozzle</h2>
-        <label class="lbl">Propellant
-          <select id="castProp" data-tip="Which propellant this grain is cast from"></select>
-        </label>
-        <h3>BATES grain</h3>
-        <div class="field-grid">
-          <label>Segments <input id="g_segments" type="number" min="1" max="10" step="1" value="3"></label>
-          <label>Outer Ø <span class="unit">mm</span> <input id="g_outer_d_mm" type="number" min="1" step="0.5" value="54"></label>
-          <label>Core Ø <span class="unit">mm</span> <input id="g_core_d_mm" type="number" min="1" step="0.5" value="20"></label>
-          <label>Length <span class="unit">mm</span> <input id="g_length_mm" type="number" min="1" step="1" value="95"></label>
-        </div>
-        <h3>Face slits</h3>
-        <div class="field-grid">
-          <label>Slits <input id="g_slit_count" type="number" min="0" max="8" step="1" value="0"></label>
-          <label>Depth <span class="unit">mm</span> <input id="g_slit_depth_mm" type="number" min="0.5" step="0.5" value="8"></label>
-          <label>Width <span class="unit">mm</span> <input id="g_slit_width_mm" type="number" min="0.5" step="0.5" value="3"></label>
-          <label>Cut length <span class="unit">mm</span> <input id="g_slit_length_mm" type="number" min="1" step="1" value="30"></label>
-          <label>Taper <span class="unit">%</span> <input id="g_slit_taper_pct" type="number" min="0" max="100" step="5" value="30"></label>
-        </div>
-        <h3>Nozzle</h3>
-        <div class="field-grid">
-          <label>Throat Ø <span class="unit">mm</span> <input id="g_throat_d_mm" type="number" min="0.5" step="0.5" value="15"></label>
-          <label>Half-angle <span class="unit">°</span> <input id="g_half_angle_deg" type="number" min="5" max="30" step="1" value="15"></label>
-        </div>
-        <button class="btn primary" id="createProject" data-tip="Open a full motor project with this propellant and grain">Create motor project →</button>
-      </div>
-
-      <div class="viewer-col">
-        <div class="tiles small">
-          <div class="tile"><span class="label">Kn</span><span class="value" id="c_kn">—</span></div>
-          <div class="tile"><span class="label">Pressure</span><span class="value" id="c_pc">—</span><span class="sub" id="c_pcsub"></span></div>
-          <div class="tile"><span class="label">Thrust</span><span class="value" id="c_thrust">—</span></div>
-          <div class="tile"><span class="label">Class</span><span class="value" id="c_class">—</span></div>
-        </div>
-
-        <div class="panel autocast">
-          <div class="anim-toolbar">
-            <h2>AutoCast</h2>
-            <button class="btn primary" id="autocastBtn" data-tip="Let Delta propose a grain and fins for your goal">✦ AutoCast</button>
+          <div id="ingredientRows"></div>
+          <div class="ingredient-foot">
+            <button class="btn small" id="addIngredient" data-tip="Add an ingredient row">+ Add ingredient</button>
+            <span class="pct-total" id="pctTotal">0%</span>
           </div>
-          <p class="footnote">Describe the flight or burn you want. AutoCast proposes
-          grain geometry and recommends fins — mechanical design only, checked by the
-          same physics as the designer. You approve before anything is applied.</p>
-          <label class="lbl">Your goal
-            <textarea id="ac_goal" rows="2" placeholder="e.g. ~2 s burn, J-class, 54 mm casing, stable on a 1.5 m rocket"></textarea>
-          </label>
-          <div class="footnote" id="autocastStatus" hidden></div>
-          <div class="ai-md" id="autocastBody"></div>
-          <button class="btn" id="applyCast" hidden data-tip="Copy the proposed geometry into the fields on the left">Apply proposed geometry</button>
+          <p class="footnote">Ingredient percentages are your documentation. Burn-rate
+          numbers (a, n, …) can't be guessed from a recipe — start from a published
+          propellant below, or measure your own in the ④ Characterization tab.</p>
         </div>
 
         <div class="panel">
-          <h2>Safety</h2>
-          <ul class="warnings" id="castWarnings"></ul>
+          <h2>Characterize &amp; save</h2>
+          <label class="lbl">Propellant name
+            <input id="p_name" type="text" maxlength="60" placeholder="e.g. My 65/35 KNSB batch">
+          </label>
+
+          <label class="lbl">Burn-rate source</label>
+          <div class="segmented" id="sourceMode">
+            <button class="seg active" data-src="base" data-tip="Use a published propellant's measured burn data">Start from published</button>
+            <button class="seg" data-src="own" data-tip="Enter your own a and n from strand-burner tests">My own a/n data</button>
+          </div>
+
+          <div id="baseForm">
+            <label class="lbl">Published baseline
+              <select id="p_base" data-tip="Your propellant will burn like this characterized propellant"></select>
+            </label>
+            <table class="spec" id="baseMeta"></table>
+          </div>
+
+          <div id="ownForm" hidden>
+            <div class="field-grid">
+              <label>a — burn coeff <span class="unit">mm/s at MPa</span><input id="p_a_mm_mpa" type="number" step="0.01" min="0.01"></label>
+              <label>n — exponent <input id="p_n" type="number" step="0.01" min="0.01" max="0.99"></label>
+              <label>Density <span class="unit">kg/m³</span><input id="p_density" type="number" step="1" min="1"></label>
+              <label>γ — exhaust <input id="p_gamma" type="number" step="0.001" min="1.01"></label>
+              <label>Flame temp <span class="unit">K</span><input id="p_temp_k" type="number" step="10" min="300"></label>
+              <label>Molar mass <span class="unit">g/mol</span><input id="p_molar_g" type="number" step="0.1" min="1"></label>
+              <label>Valid from <span class="unit">MPa</span><input id="p_min_mpa" type="number" step="0.1" min="0.01"></label>
+              <label>Valid to <span class="unit">MPa</span><input id="p_max_mpa" type="number" step="0.1" min="0.1"></label>
+            </div>
+            <p class="footnote">Making your own propellant means running a
+            characterization test — the ④ Characterization tab fits a and n from
+            your measured burns and fills these fields for you.</p>
+          </div>
+
+          <label class="lbl">Source / provenance
+            <input id="p_source" type="text" maxlength="200" placeholder="e.g. Nakka published KNSB; mentor-supervised batch">
+          </label>
+
+          <div class="save-row">
+            <button class="btn primary" id="saveProp" data-tip="Save changes to this propellant — it appears in every project's menu">Save changes</button>
+            <span class="footnote" id="saveMsg"></span>
+          </div>
         </div>
       </div>
+    </section>
+
+    <!-- ============ TAB 2 : PREPARE ============ -->
+    <section class="tab" id="tab-prepare" hidden>
+      <div class="banner" role="note">
+        <strong>Preparation is the dangerous step.</strong> Mixing energetic materials
+        is done under a certified mentor or RSO — never from an app. IgnitionBench
+        gives you a safety checklist and a place to record <em>your</em> process; it
+        will not provide a mixing or casting procedure.
+      </div>
+
+      <div class="tab-grid">
+        <div class="panel">
+          <h2>Safety checklist</h2>
+          <ul class="safety-check" id="safetyCheck"></ul>
+          <p class="footnote">General practice, not a substitute for hands-on
+          mentorship and your local range's rules. Ask ✦ Delta about any item.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Your preparation notes</h2>
+          <p class="footnote">Notes for <strong id="prepPropName">this propellant</strong>.</p>
+          <textarea id="prepNotes" rows="12"
+            placeholder="Record the steps, order, cure times, tooling, and safety measures from your mentor or published source…"></textarea>
+          <div class="save-row">
+            <button class="btn" id="savePrep" data-tip="Save these notes onto this propellant">Save notes</button>
+            <span class="footnote" id="prepMsg"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB 3 : CAST ============ -->
+    <section class="tab" id="tab-cast" hidden>
+      <div class="banner" id="castError" hidden></div>
+
+      <div class="tab-grid motor-grid">
+        <div class="panel inputs">
+          <h2>Grain &amp; nozzle</h2>
+          <p class="footnote">Casting <strong id="castPropName">this propellant</strong>.</p>
+          <h3>BATES grain</h3>
+          <div class="field-grid">
+            <label>Segments <input id="g_segments" type="number" min="1" max="10" step="1" value="3"></label>
+            <label>Outer Ø <span class="unit">mm</span> <input id="g_outer_d_mm" type="number" min="1" step="0.5" value="54"></label>
+            <label>Core Ø <span class="unit">mm</span> <input id="g_core_d_mm" type="number" min="1" step="0.5" value="20"></label>
+            <label>Length <span class="unit">mm</span> <input id="g_length_mm" type="number" min="1" step="1" value="95"></label>
+          </div>
+          <h3>Face slits</h3>
+          <div class="field-grid">
+            <label>Slits <input id="g_slit_count" type="number" min="0" max="8" step="1" value="0"></label>
+            <label>Depth <span class="unit">mm</span> <input id="g_slit_depth_mm" type="number" min="0.5" step="0.5" value="8"></label>
+            <label>Width <span class="unit">mm</span> <input id="g_slit_width_mm" type="number" min="0.5" step="0.5" value="3"></label>
+            <label>Cut length <span class="unit">mm</span> <input id="g_slit_length_mm" type="number" min="1" step="1" value="30"></label>
+            <label>Taper <span class="unit">%</span> <input id="g_slit_taper_pct" type="number" min="0" max="100" step="5" value="30"></label>
+          </div>
+          <h3>Nozzle</h3>
+          <div class="field-grid">
+            <label>Throat Ø <span class="unit">mm</span> <input id="g_throat_d_mm" type="number" min="0.5" step="0.5" value="15"></label>
+            <label>Half-angle <span class="unit">°</span> <input id="g_half_angle_deg" type="number" min="5" max="30" step="1" value="15"></label>
+          </div>
+          <button class="btn primary" id="createProject" data-tip="Open a full motor project with this propellant and grain">Create motor project →</button>
+        </div>
+
+        <div class="viewer-col">
+          <div class="tiles small">
+            <div class="tile"><span class="label">Kn</span><span class="value" id="c_kn">—</span></div>
+            <div class="tile"><span class="label">Pressure</span><span class="value" id="c_pc">—</span><span class="sub" id="c_pcsub"></span></div>
+            <div class="tile"><span class="label">Thrust</span><span class="value" id="c_thrust">—</span></div>
+            <div class="tile"><span class="label">Class</span><span class="value" id="c_class">—</span></div>
+          </div>
+
+          <div class="panel autocast">
+            <div class="anim-toolbar">
+              <h2>AutoCast</h2>
+              <button class="btn primary" id="autocastBtn" data-tip="Let Delta propose a grain and fins for your goal">✦ AutoCast</button>
+            </div>
+            <p class="footnote">Describe the flight or burn you want. AutoCast proposes
+            grain geometry and recommends fins — mechanical design only, checked by the
+            same physics as the designer. You approve before anything is applied.</p>
+            <label class="lbl">Your goal
+              <textarea id="ac_goal" rows="2" placeholder="e.g. ~2 s burn, J-class, 54 mm casing, stable on a 1.5 m rocket"></textarea>
+            </label>
+            <div class="footnote" id="autocastStatus" hidden></div>
+            <div class="ai-md" id="autocastBody"></div>
+            <button class="btn" id="applyCast" hidden data-tip="Copy the proposed geometry into the fields on the left">Apply proposed geometry</button>
+          </div>
+
+          <div class="panel">
+            <h2>Safety</h2>
+            <ul class="warnings" id="castWarnings"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB 4 : CHARACTERIZATION ============ -->
+    <section class="tab" id="tab-char" hidden>
+      <div class="banner" role="note">
+        <strong>Characterization is live-fire testing.</strong> a and n come from
+        measuring real burns — a strand burner or a small instrumented test motor —
+        under a certified mentor or RSO at a legal test site, with remote ignition
+        and the smallest samples that give data. IgnitionBench fits the numbers;
+        the testing discipline is yours. Never scale up an uncharacterized batch.
+      </div>
+      <div class="banner soft" id="charSkip" hidden></div>
+
+      <div class="tab-grid">
+        <div class="panel">
+          <h2>Test burns</h2>
+          <p class="footnote">One row per burn: the pressure it burned at and the
+          measured burn rate (sample length ÷ burn time). Spread points across the
+          pressure range you plan to operate in — at least 3 burns for a fit.</p>
+          <div class="char-head">
+            <span>Pressure <span class="unit">MPa</span></span>
+            <span>Burn rate <span class="unit">mm/s</span></span>
+            <span></span>
+          </div>
+          <div id="charRows"></div>
+          <div class="ingredient-foot">
+            <button class="btn small" id="addCharRow" data-tip="Add a test-burn row">+ Add test burn</button>
+          </div>
+          <p class="footnote">1 MPa ≈ 145 psi. Richard Nakka's strand-burner
+          articles (see 📚 Resources on the home page) cover how these tests are
+          run and instrumented.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Fit r = a·Pⁿ</h2>
+          <div class="char-chart" id="charChart"></div>
+          <table class="spec" id="charFit"></table>
+          <div class="footnote" id="charMsg"></div>
+          <div class="save-row">
+            <button class="btn primary" id="charToPlan" disabled
+              data-tip="Copy the fitted a, n, and validated pressure range into Plan's own-data form">Use in Plan →</button>
+          </div>
+          <p class="footnote">The fit gives a, n, and the pressure range your data
+          validates. Density, γ, flame temp, and molar mass still come from
+          published thermochemistry for your formulation — fill those in Plan.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- new-propellant modal -->
+<div class="modal-overlay" id="newModal" hidden>
+  <div class="modal">
+    <h2>New propellant</h2>
+    <label for="newPropName">Propellant name</label>
+    <input id="newPropName" type="text" placeholder="e.g. My 65/35 KNSB batch" maxlength="60" autocomplete="off">
+    <p class="footnote">It starts from a published KNSB baseline — you can switch it
+    to your own a/n data once it's open.</p>
+    <div class="modal-actions">
+      <button class="btn" id="newModalCancel">Cancel</button>
+      <button class="btn primary" id="newModalCreate">Create</button>
     </div>
-  </section>
-</main>
+  </div>
+</div>
 
 <button class="ai-side-tab" id="aiTab" title="Ask Delta, the SRM mentor" data-tip="Open Delta — ask about propellants, safety, or your design">✦ Delta</button>
 <aside class="ai-drawer" id="aiDrawer" hidden>

@@ -887,3 +887,30 @@ textarea:focus { outline: none; border-color: var(--accent); }
 .char-row input { margin-top: 0; }
 .char-chart { margin: 6px 0 10px; }
 .char-chart svg { width: 100%; height: auto; display: block; }
+
+/* Propellant Engine gallery + workspace header */
+.gallery { display: block; }
+.ws-head {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 28px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ws-head h2 { margin: 0; font-size: 20px; color: var(--ink); }
+.ws-sub { font-size: 13px; color: var(--ink-3); }
+.back-link {
+  flex-basis: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 8px;
+  margin-left: -8px;
+  border-radius: 7px;
+}
+.back-link:hover { color: var(--ink); background: var(--surface-2); }
