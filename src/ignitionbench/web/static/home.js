@@ -100,4 +100,10 @@ $("modal").addEventListener("click", (e) => {
   if (e.target === $("modal")) $("modal").hidden = true;
 });
 
+$("resourcesBtn").addEventListener("click", () => ($("resourcesModal").hidden = false));
+$("resourcesClose").addEventListener("click", () => ($("resourcesModal").hidden = true));
+$("resourcesModal").addEventListener("click", (e) => {
+  if (e.target === $("resourcesModal")) $("resourcesModal").hidden = true;
+});
+
 loadProjects();

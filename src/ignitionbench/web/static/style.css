@@ -837,3 +837,34 @@ textarea:focus { outline: none; border-color: var(--accent); }
   pointer-events: none;
 }
 .tooltip-bubble[hidden] { display: none; }
+
+/* ============ resources ============ */
+
+.rail-resources { align-self: flex-start; }
+
+.resources-modal {
+  width: min(560px, 92vw);
+  max-height: 84vh;
+  overflow-y: auto;
+}
+.res-note { margin: 0 0 6px; }
+.res-h {
+  margin: 16px 0 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.res-list { list-style: none; margin: 0; padding: 0; }
+.res-list li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.res-list li:last-child { border-bottom: none; }
+.res-list a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.res-list a:hover { text-decoration: underline; }
+.res-list em { color: var(--ink); font-style: italic; }

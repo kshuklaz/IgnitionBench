@@ -42,6 +42,8 @@ document.documentElement.dataset.theme =
       its grain casting. Anything you save there shows up in every project's
       propellant menu.</p>
     </div>
+    <button class="btn small rail-resources" id="resourcesBtn"
+      data-tip="Trusted websites, books, and open-source tools for learning rocketry">📚 Resources</button>
   </aside>
 
   <div class="home-main">
@@ -55,6 +57,41 @@ document.documentElement.dataset.theme =
     <div class="project-grid" id="projectGrid"></div>
   </div>
 </main>
+
+<div class="modal-overlay" id="resourcesModal" hidden>
+  <div class="modal resources-modal">
+    <h2>Learning resources</h2>
+    <p class="footnote res-note">Published, community-vetted sources — the same kind
+    IgnitionBench's own propellant data comes from. Always cross-check numbers here
+    before trusting them with hardware.</p>
+
+    <h3 class="res-h">Websites</h3>
+    <ul class="res-list">
+      <li><a href="https://www.nakka-rocketry.net" target="_blank" rel="noopener">Richard Nakka's Experimental Rocketry</a> — the definitive amateur reference; source of the KNSB/KNDX burn-rate data used in this app.</li>
+      <li><a href="https://www.thrustcurve.org" target="_blank" rel="noopener">ThrustCurve.org</a> — measured thrust curves for every certified commercial motor.</li>
+      <li><a href="https://www.nar.org" target="_blank" rel="noopener">National Association of Rocketry (NAR)</a> — safety codes, certification levels, and local clubs.</li>
+      <li><a href="https://www.tripoli.org" target="_blank" rel="noopener">Tripoli Rocketry Association</a> — high-power certification and research launches (where experimental motors may legally fly).</li>
+    </ul>
+
+    <h3 class="res-h">Open-source tools</h3>
+    <ul class="res-list">
+      <li><a href="https://github.com/reilleya/openMotor" target="_blank" rel="noopener">openMotor</a> — solid motor simulator; source of this app's propellant dataset. Great for cross-checking designs.</li>
+      <li><a href="https://openrocket.info" target="_blank" rel="noopener">OpenRocket</a> — full rocket design and flight simulation; use it to verify stability and fin sizing.</li>
+      <li><a href="https://www.burnsim.com" target="_blank" rel="noopener">BurnSim</a> — the hobby-standard motor ballistics tool (free, closed-source) — validate against it before building anything.</li>
+    </ul>
+
+    <h3 class="res-h">Books</h3>
+    <ul class="res-list">
+      <li><em>Rocket Propulsion Elements</em> — Sutton &amp; Biblarz. The standard propulsion textbook; where the nozzle math in this app comes from.</li>
+      <li><em>Handbook of Model Rocketry</em> — G. Harry Stine. The classic start-to-finish hobby guide, NAR-endorsed.</li>
+      <li><em>Topics in Advanced Model Rocketry</em> — MIT Press. Bridges hobby practice and real engineering analysis.</li>
+    </ul>
+
+    <div class="modal-actions">
+      <button class="btn" id="resourcesClose">Close</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="modal" hidden>
   <div class="modal">
