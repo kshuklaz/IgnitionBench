@@ -321,11 +321,11 @@ def _system_blocks(project: dict | None) -> list[dict]:
     return [{"type": "text", "text": text}]
 
 
-def _run(client, *, system, messages, tools, project_id, max_tokens):
-    """Manual tool loop; returns (final response, whether the project changed)."""
+def _run(client, *, system, messages, tools, handle_tool, max_tokens):
+    """Manual tool loop. `handle_tool(block) -> str` runs a tool call and returns
+    the tool_result text; side effects are the caller's business (via closure)."""
     import anthropic
 
-    updated = False
     convo = list(messages)
     for _ in range(8):  # cap tool round-trips
         try:
@@ -342,18 +342,15 @@ def _run(client, *, system, messages, tools, project_id, max_tokens):
         except anthropic.APIStatusError as exc:
             raise AIError(f"Claude API error ({exc.status_code}): {exc.message}") from exc
         if response.stop_reason != "tool_use":
-            return response, updated
+            return response
         convo.append({"role": "assistant", "content": response.content})
-        results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                text, saved = _apply_design_update(project_id, block.input)
-                updated = updated or saved
-                results.append(
-                    {"type": "tool_result", "tool_use_id": block.id, "content": text}
-                )
+        results = [
+            {"type": "tool_result", "tool_use_id": block.id, "content": handle_tool(block)}
+            for block in response.content
+            if block.type == "tool_use"
+        ]
         convo.append({"role": "user", "content": results})
-    raise AIError("The AI made too many consecutive design edits; stopping for safety.")
+    raise AIError("The AI made too many consecutive tool calls; stopping for safety.")
 
 
 def _text_of(response) -> str:
@@ -370,12 +367,21 @@ def chat(project_id: str | None, messages: list[dict]) -> dict:
     ]
     if not convo or convo[-1]["role"] != "user":
         raise AIError("The last message must be from the user.")
-    response, updated = _run(
+
+    updated = False
+
+    def handle(block):
+        nonlocal updated
+        text, saved = _apply_design_update(project_id, block.input)
+        updated = updated or saved
+        return text
+
+    response = _run(
         _client(),
         system=_system_blocks(project),
         messages=convo,
         tools=[UPDATE_DESIGN_TOOL] if project else [],
-        project_id=project_id,
+        handle_tool=handle,
         max_tokens=8000,
     )
     return {
@@ -388,12 +394,126 @@ def chat(project_id: str | None, messages: list[dict]) -> dict:
 def review(project_id: str) -> str:
     """Full-project safety review for the Review tab."""
     project = store.load_project(project_id)
-    response, _ = _run(
+    response = _run(
         _client(),
         system=_system_blocks(project),
         messages=[{"role": "user", "content": REVIEW_INSTRUCTION}],
         tools=[],  # a review must not silently change the design
-        project_id=project_id,
+        handle_tool=lambda block: "No tools are available in a review.",
         max_tokens=8000,
     )
     return _text_of(response)
+
+
+# ---- AutoCast (Propellant Engine) ----
+
+PROPOSE_GRAIN_TOOL = {
+    "name": "propose_grain",
+    "description": (
+        "Propose a BATES grain + nozzle geometry that meets the user's stated "
+        "goal. This does NOT change any saved design — it returns a proposal the "
+        "user reviews and applies themselves. The proposal is checked by the "
+        "app's physics pipeline against the chosen propellant; if it is invalid "
+        "or overpressure you get the reason back and should adjust and call "
+        "again. Geometry only — never propose propellant chemistry."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "grain": UPDATE_DESIGN_TOOL["input_schema"]["properties"]["grain"],
+            "nozzle": UPDATE_DESIGN_TOOL["input_schema"]["properties"]["nozzle"],
+        },
+        "additionalProperties": False,
+    },
+}
+
+AUTOCAST_INSTRUCTION = """\
+The user wants AutoCast to design a grain for the goal in <cast_context>. Use the
+propose_grain tool to submit a BATES grain + nozzle for the CHOSEN propellant
+(do not change the propellant — geometry only). Iterate if the pipeline rejects
+your proposal. When you have a valid proposal, reply in short Markdown:
+
+## What I cast and why
+One paragraph tying the geometry to the goal (impulse class, burn time, Kn,
+port/throat margin).
+
+## Recommended fins
+Brief, qualitative fin guidance for a rocket on this motor (count, planform,
+rough span/root ratio, and that stability margin must be checked with a proper
+tool like OpenRocket) — recommendations only, no build instructions.
+
+## Before you cast
+One or two safety/next-step reminders. Do NOT provide any propellant
+formulation, mixing, or casting-the-propellant procedure, and do not sign off
+the design — final go/no-go belongs to a certified mentor/RSO.
+"""
+
+
+def _cast_context(propellant_key: str, grain: dict, nozzle: dict, goal: str) -> str:
+    name = catalog_name(propellant_key)
+    analysis = _analyze({
+        "propellant": {"mode": "library", "key": propellant_key},
+        "grain": grain,
+        "nozzle": nozzle,
+    })
+    return (
+        f"Chosen propellant: {name} (key '{propellant_key}') — keep this propellant.\n"
+        f"User's goal: {goal or '(not specified — use sensible hobby defaults)'}\n"
+        f"Starting grain (mm): {json.dumps(grain)}\n"
+        f"Starting nozzle (mm/deg): {json.dumps(nozzle)}\n"
+        f"Starting point {_analysis_summary(analysis)}"
+    )
+
+
+def catalog_name(key: str) -> str:
+    from . import propellant_store
+
+    entry = propellant_store.catalog().get(key)
+    return entry["name"] if entry else key
+
+
+def autocast(propellant_key: str, grain: dict, nozzle: dict, goal: str) -> dict:
+    """Propose a grain + nozzle for a goal without saving anything."""
+    base_grain = dict(grain)
+    base_nozzle = dict(nozzle)
+    proposal: dict = {}
+
+    def handle(block):
+        g = dict(base_grain)
+        n = dict(base_nozzle)
+        for key, value in (block.input.get("grain") or {}).items():
+            if key in UPDATE_DESIGN_TOOL["input_schema"]["properties"]["grain"]["properties"]:
+                g[key] = int(value) if key in _INT_FIELDS else float(value)
+        for key, value in (block.input.get("nozzle") or {}).items():
+            if key in UPDATE_DESIGN_TOOL["input_schema"]["properties"]["nozzle"]["properties"]:
+                n[key] = float(value)
+        analysis = _analyze({
+            "propellant": {"mode": "library", "key": propellant_key},
+            "grain": g,
+            "nozzle": n,
+        })
+        if "error" in analysis:
+            return f"Proposal REJECTED by the physics pipeline: {analysis['error']}. Adjust and try again."
+        proposal["grain"] = g
+        proposal["nozzle"] = n
+        proposal["analysis"] = analysis
+        return "Proposal is valid.\n" + _analysis_summary(analysis)
+
+    system = [{
+        "type": "text",
+        "text": MENTOR_SYSTEM + "\n\n" + EMBEDDED_CONTEXT
+        + f"\n\n<cast_context>\n{_cast_context(propellant_key, base_grain, base_nozzle, goal)}\n</cast_context>",
+    }]
+    response = _run(
+        _client(),
+        system=system,
+        messages=[{"role": "user", "content": AUTOCAST_INSTRUCTION}],
+        tools=[PROPOSE_GRAIN_TOOL],
+        handle_tool=handle,
+        max_tokens=4000,
+    )
+    result = {"reply": _text_of(response), "proposal": None}
+    if "grain" in proposal:
+        result["proposal"] = {"grain": proposal["grain"], "nozzle": proposal["nozzle"]}
+        result["analysis"] = proposal["analysis"]
+    return result

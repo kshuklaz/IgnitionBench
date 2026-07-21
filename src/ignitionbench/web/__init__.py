@@ -20,7 +20,6 @@ from ignitionbench.propellant import (
     MIN_PORT_TO_THROAT,
     PROPELLANTS,
     BatesGrain,
-    BurnRateSegment,
     FaceSlitGrain,
     Propellant,
     kn,
@@ -30,7 +29,7 @@ from ignitionbench.propellant import (
 )
 from ignitionbench.simulation import certification, motor_class, simulate_burn
 
-from . import store
+from . import propellant_store, store
 
 
 class DesignError(ValueError):
@@ -39,38 +38,24 @@ class DesignError(ValueError):
 
 def _build_propellant(spec: dict) -> Propellant:
     if spec.get("mode") == "library":
+        key = spec.get("key")
         try:
-            return PROPELLANTS[spec["key"]]
+            resolved = propellant_store.resolve(key)  # saved custom:<id>?
+        except propellant_store.PropellantError as exc:
+            raise DesignError(str(exc)) from None
+        if resolved is not None:
+            return resolved
+        try:
+            return PROPELLANTS[key]
         except KeyError:
-            raise DesignError(f"Unknown propellant {spec.get('key')!r}.") from None
-    c = spec.get("custom", {})
+            raise DesignError(f"Unknown propellant {key!r}.") from None
+    custom = spec.get("custom") or {}
     try:
-        a_mm = float(c["a_mm_mpa"])
-        n = float(c["n"])
-        density = float(c["density"])
-        gamma = float(c["gamma"])
-        temp = float(c["temp_k"])
-        molar_g = float(c["molar_g"])
-        p_min = float(c["min_mpa"]) * 1e6
-        p_max = float(c["max_mpa"]) * 1e6
-    except (KeyError, TypeError, ValueError):
-        raise DesignError("Custom propellant fields must all be valid numbers.") from None
-    if a_mm <= 0 or not 0 < n < 1 or density <= 0 or gamma <= 1 or temp <= 0 or molar_g <= 0:
-        raise DesignError(
-            "Custom propellant out of range: need a > 0, 0 < n < 1, density > 0, "
-            "gamma > 1, temperature > 0, molar mass > 0."
+        return propellant_store.ballistics_to_propellant(
+            custom, custom.get("name") or "Custom batch"
         )
-    if not 0 < p_min < p_max:
-        raise DesignError("Valid pressure range needs 0 < min < max (MPa).")
-    a_si = a_mm * 1e-3 / (1e6**n)  # mm/s at MPa → m/s at Pa
-    return Propellant(
-        name=str(c.get("name") or "Custom batch"),
-        density=density,
-        combustion_temp=temp,
-        molar_mass=molar_g / 1000,
-        gamma=gamma,
-        segments=(BurnRateSegment(p_min, p_max, a_si, n),),
-    )
+    except propellant_store.PropellantError as exc:
+        raise DesignError(str(exc)) from None
 
 
 def _parse_design(data: dict) -> tuple[Propellant, BatesGrain, float, float]:
@@ -199,29 +184,41 @@ def create_app() -> Flask:
             return redirect("/")
         return render_template("project.html", project_id=project_id)
 
+    @app.get("/engine")
+    def engine_page():
+        return render_template("engine.html")
+
     # ---- propellant data ----
 
     @app.get("/api/propellants")
     def propellants():
-        return jsonify(
-            {
-                key: {
-                    "name": p.name,
-                    "density": p.density,
-                    "c_star": p.c_star,
-                    "gamma": p.gamma,
-                    "temp_k": p.combustion_temp,
-                    "molar_g": p.molar_mass * 1000,
-                    "min_pressure": p.min_pressure,
-                    "max_pressure": p.max_pressure,
-                    "segments": [
-                        {"min": s.min_pressure, "max": s.max_pressure, "a": s.a, "n": s.n}
-                        for s in p.segments
-                    ],
-                }
-                for key, p in PROPELLANTS.items()
-            }
-        )
+        return jsonify(propellant_store.catalog())
+
+    @app.post("/api/propellants")
+    def propellants_create():
+        try:
+            return jsonify(propellant_store.create_propellant(request.get_json(force=True))), 201
+        except propellant_store.PropellantError as exc:
+            return jsonify({"error": str(exc)}), 422
+
+    @app.put("/api/propellants/<propellant_id>")
+    def propellants_update(propellant_id: str):
+        try:
+            return jsonify(
+                propellant_store.update_propellant(propellant_id, request.get_json(force=True))
+            )
+        except KeyError:
+            return jsonify({"error": "Propellant not found."}), 404
+        except propellant_store.PropellantError as exc:
+            return jsonify({"error": str(exc)}), 422
+
+    @app.delete("/api/propellants/<propellant_id>")
+    def propellants_delete(propellant_id: str):
+        try:
+            propellant_store.delete_propellant(propellant_id)
+        except KeyError:
+            return jsonify({"error": "Propellant not found."}), 404
+        return jsonify({"ok": True})
 
     # ---- projects ----
 
@@ -313,6 +310,23 @@ def create_app() -> Flask:
             return jsonify({"review": ai.review(data["project_id"])})
         except KeyError:
             return jsonify({"error": "Project not found."}), 404
+        except ai.AIError as exc:
+            return jsonify({"error": str(exc)}), 502
+
+    @app.post("/api/ai/autocast")
+    def ai_autocast():
+        if not ai.configured():
+            return jsonify({"error": "AI is not configured — set ANTHROPIC_API_KEY."}), 503
+        data = request.get_json(force=True)
+        try:
+            return jsonify(
+                ai.autocast(
+                    data.get("propellant_key") or "knsb",
+                    data.get("grain") or {},
+                    data.get("nozzle") or {},
+                    data.get("goal") or "",
+                )
+            )
         except ai.AIError as exc:
             return jsonify({"error": str(exc)}), 502
 

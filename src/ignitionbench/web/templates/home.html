@@ -22,20 +22,38 @@ document.documentElement.dataset.theme =
     </div>
   </div>
   <div class="header-right">
-    <button class="btn theme-toggle" id="themeToggle" title="Switch theme">☀</button>
-    <button class="btn primary" id="newProjectBtn">+ New project</button>
+    <button class="btn theme-toggle" id="themeToggle" data-tip="Switch between light and dark mode">☀</button>
+    <button class="btn primary" id="newProjectBtn" data-tip="Create a new motor project">+ New project</button>
   </div>
 </header>
 
 <main class="home">
-  <div class="empty-state" id="emptyState" hidden>
-    <img class="empty-logo" data-logo="{{ url_for('static', filename='logo-full.png') }}"
-         src="{{ url_for('static', filename='logo-full.png') }}" alt="">
-    <h2>No projects yet</h2>
-    <p>Start your first motor — pick a propellant, shape the grain, and watch it burn.</p>
-    <button class="btn primary" id="emptyNewBtn">Start your first motor</button>
+  <aside class="side-rail">
+    <nav class="rail-nav">
+      <a class="rail-item active" href="/" data-tip="Your saved motor projects">
+        <span class="rail-icon">◆</span> Projects
+      </a>
+      <a class="rail-item" href="/engine" data-tip="Design and save your own propellant — plan ingredients, prepare safely, and cast the grain">
+        <span class="rail-icon">✦</span> Propellant Engine
+      </a>
+    </nav>
+    <div class="rail-foot">
+      <p><strong>Propellant Engine</strong> is where you develop a propellant and
+      its grain casting. Anything you save there shows up in every project's
+      propellant menu.</p>
+    </div>
+  </aside>
+
+  <div class="home-main">
+    <div class="empty-state" id="emptyState" hidden>
+      <img class="empty-logo" data-logo="{{ url_for('static', filename='logo-full.png') }}"
+           src="{{ url_for('static', filename='logo-full.png') }}" alt="">
+      <h2>No projects yet</h2>
+      <p>Start your first motor — pick a propellant, shape the grain, and watch it burn.</p>
+      <button class="btn primary" id="emptyNewBtn">Start your first motor</button>
+    </div>
+    <div class="project-grid" id="projectGrid"></div>
   </div>
-  <div class="project-grid" id="projectGrid"></div>
 </main>
 
 <div class="modal-overlay" id="modal" hidden>
@@ -65,6 +83,7 @@ document.documentElement.dataset.theme =
 </aside>
 
 <script src="{{ url_for('static', filename='theme.js') }}"></script>
+<script src="{{ url_for('static', filename='tooltip.js') }}"></script>
 <script src="{{ url_for('static', filename='ai.js') }}"></script>
 <script src="{{ url_for('static', filename='home.js') }}"></script>
 </body>
