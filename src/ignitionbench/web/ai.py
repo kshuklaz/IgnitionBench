@@ -234,8 +234,8 @@ def _analyze(payload: dict) -> dict:
     from ignitionbench.web import DesignError, _design_result, _parse_design
 
     try:
-        prop, grain, throat_area, half_angle = _parse_design(payload)
-        return _design_result(prop, grain, throat_area, half_angle)
+        prop, grain, throat_area, half_angle, ambient = _parse_design(payload)
+        return _design_result(prop, grain, throat_area, half_angle, ambient)
     except (DesignError, ValueError) as exc:
         return {"error": str(exc)}
 

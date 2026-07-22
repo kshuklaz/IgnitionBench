@@ -194,6 +194,24 @@ document.documentElement.dataset.theme =
             <label>Throat Ø <span class="unit">mm</span> <input id="g_throat_d_mm" type="number" min="0.5" step="0.5" value="15"></label>
             <label>Half-angle <span class="unit">°</span> <input id="g_half_angle_deg" type="number" min="5" max="30" step="1" value="15"></label>
           </div>
+          <h3>Ambient pressure</h3>
+          <div class="field-grid">
+            <label>Where it fires
+              <select id="ambient_preset" data-tip="Ambient (back) pressure the motor fires into — thrust and Isp rise as it drops">
+                <option value="101.325">Sea level — 101 kPa</option>
+                <option value="84.3">Mile-high / Denver — 84 kPa</option>
+                <option value="70.1">High altitude 3 km — 70 kPa</option>
+                <option value="22.6">Airliner cruise 11 km — 23 kPa</option>
+                <option value="1.2">Edge of space 30 km — 1 kPa</option>
+                <option value="0">Space / vacuum — 0 kPa</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </label>
+            <label>Pressure <span class="unit">kPa</span> <input id="ambient_kpa" type="number" min="0" max="150" step="0.1" value="101.3" data-tip="Ambient pressure in kilopascals (0 = vacuum)"></label>
+          </div>
+          <p class="footnote">The nozzle is sized to expand optimally at sea level;
+          this only changes the back-pressure it fires into, so you can see the
+          same motor's thrust and Isp at altitude or in vacuum.</p>
           <button class="btn primary" id="createProject" data-tip="Open a full motor project with this propellant and grain">Create motor project →</button>
         </div>
 
@@ -201,7 +219,7 @@ document.documentElement.dataset.theme =
           <div class="tiles small">
             <div class="tile"><span class="label">Kn</span><span class="value" id="c_kn">—</span></div>
             <div class="tile"><span class="label">Pressure</span><span class="value" id="c_pc">—</span><span class="sub" id="c_pcsub"></span></div>
-            <div class="tile"><span class="label">Thrust</span><span class="value" id="c_thrust">—</span></div>
+            <div class="tile"><span class="label">Thrust</span><span class="value" id="c_thrust">—</span><span class="sub" id="c_thrustsub"></span></div>
             <div class="tile"><span class="label">Class</span><span class="value" id="c_class">—</span></div>
           </div>
 

@@ -9,7 +9,9 @@ from flask import Flask, Response, jsonify, redirect, render_template, request
 
 from ignitionbench.export import grain_segment_stl
 from ignitionbench.nozzle import (
+    STANDARD_ATMOSPHERE,
     ConicalNozzle,
+    exit_pressure,
     mass_flow,
     optimal_expansion_ratio,
     specific_impulse,
@@ -58,10 +60,28 @@ def _build_propellant(spec: dict) -> Propellant:
         raise DesignError(str(exc)) from None
 
 
-def _parse_design(data: dict) -> tuple[Propellant, BatesGrain, float, float]:
+def _parse_ambient(data: dict) -> float:
+    """Ambient (back-)pressure in Pa. Defaults to sea level; clamped to a sane range.
+
+    Accepts ``ambient_pa`` (Pa). Blank/missing/invalid falls back to sea level so
+    existing callers and the project designer are unaffected.
+    """
+    raw = data.get("ambient_pa", None)
+    if raw is None or raw == "":
+        return STANDARD_ATMOSPHERE
+    try:
+        pa = float(raw)
+    except (TypeError, ValueError):
+        return STANDARD_ATMOSPHERE
+    # 0 = vacuum (space); cap the top a little above a dense sea-level day.
+    return max(0.0, min(pa, 150_000.0))
+
+
+def _parse_design(data: dict) -> tuple[Propellant, BatesGrain, float, float, float]:
     prop = _build_propellant(data.get("propellant", {}))
     g = data.get("grain", {})
     nz = data.get("nozzle", {})
+    ambient = _parse_ambient(data)
     try:
         slit_count = int(g.get("slit_count") or 0)
         if slit_count > 0:
@@ -92,15 +112,26 @@ def _parse_design(data: dict) -> tuple[Propellant, BatesGrain, float, float]:
         raise DesignError(str(exc) or "All design inputs must be valid numbers.") from exc
     if throat_d <= 0 or not 0 < half_angle < 90:
         raise DesignError("Throat diameter must be positive and half-angle between 0 and 90°.")
-    return prop, grain, math.pi / 4 * throat_d**2, half_angle
+    return prop, grain, math.pi / 4 * throat_d**2, half_angle, ambient
 
 
-def _design_result(prop: Propellant, grain: BatesGrain, throat_area: float, half_angle: float) -> dict:
+def _design_result(
+    prop: Propellant,
+    grain: BatesGrain,
+    throat_area: float,
+    half_angle: float,
+    ambient: float = STANDARD_ATMOSPHERE,
+) -> dict:
     kn_ratio = kn(grain.burning_area(), throat_area)
     pc = steady_state_pressure(prop, kn_ratio)
 
+    # The nozzle is sized to expand optimally at sea level (a buildable, finite
+    # geometry). Ambient pressure then only drives the pressure-thrust term, so
+    # the same motor's thrust/Isp rise with altitude and peak in vacuum without
+    # the exit diameter running off to infinity.
     eps = optimal_expansion_ratio(pc, prop.gamma)
-    cf = thrust_coefficient(pc, eps, prop.gamma, half_angle_deg=half_angle)
+    cf = thrust_coefficient(pc, eps, prop.gamma, ambient_pressure=ambient, half_angle_deg=half_angle)
+    pe = exit_pressure(pc, eps, prop.gamma)
     force = thrust(pc, throat_area, cf)
     mdot = mass_flow(pc, throat_area, prop.c_star)
     mass = grain.propellant_mass(prop)
@@ -137,6 +168,9 @@ def _design_result(prop: Propellant, grain: BatesGrain, throat_area: float, half
         "isp_s": specific_impulse(cf, prop.c_star),
         "expansion_ratio": eps,
         "cf": cf,
+        "ambient_pa": ambient,
+        "ambient_kpa": ambient / 1000,
+        "exit_pressure_kpa": pe / 1000,
         "exit_d_mm": nozzle.exit_diameter * 1000,
         "divergent_length_mm": nozzle.divergent_length * 1000,
         "mass_flow_kg_s": mdot,
@@ -260,15 +294,17 @@ def create_app() -> Flask:
     @app.post("/api/design")
     def design():
         try:
-            prop, grain, throat_area, half_angle = _parse_design(request.get_json(force=True))
-            return jsonify(_design_result(prop, grain, throat_area, half_angle))
+            prop, grain, throat_area, half_angle, ambient = _parse_design(request.get_json(force=True))
+            return jsonify(_design_result(prop, grain, throat_area, half_angle, ambient))
         except (DesignError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 422
 
     @app.post("/api/simulate")
     def simulate():
         try:
-            prop, grain, throat_area, half_angle = _parse_design(request.get_json(force=True))
+            prop, grain, throat_area, half_angle, _ambient = _parse_design(request.get_json(force=True))
+            # The burn sim optimizes its own nozzle to sea level; ambient is a
+            # design-page what-if only, so it is intentionally not threaded here.
             result = simulate_burn(prop, grain, throat_area, half_angle_deg=half_angle)
         except (DesignError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 422

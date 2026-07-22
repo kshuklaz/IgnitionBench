@@ -386,12 +386,34 @@ function castNozzle() {
   for (const f of NOZZLE_IDS) n[f] = parseFloat($(`g_${f}`).value);
   return n;
 }
+function ambientPa() {
+  const kpa = parseFloat($("ambient_kpa").value);
+  return Number.isFinite(kpa) ? Math.max(0, kpa) * 1000 : 101325;
+}
+
 function castDesignPayload() {
   return {
     propellant: { mode: "library", key: currentKey },
     grain: castGrain(),
     nozzle: castNozzle(),
+    ambient_pa: ambientPa(),
   };
+}
+
+// Selecting a preset fills the kPa field; typing a value marks it "Custom…".
+function onAmbientPreset() {
+  const v = $("ambient_preset").value;
+  if (v === "custom") { $("ambient_kpa").focus(); return; }
+  $("ambient_kpa").value = v;
+  runCastDesign();
+}
+function onAmbientKpa() {
+  const v = parseFloat($("ambient_kpa").value);
+  const match = [...$("ambient_preset").options].find(
+    (o) => o.value !== "custom" && Math.abs(parseFloat(o.value) - v) < 0.05
+  );
+  $("ambient_preset").value = match ? match.value : "custom";
+  runCastDesign();
 }
 
 async function runCastDesign() {
@@ -416,6 +438,7 @@ async function runCastDesign() {
   $("c_pc").textContent = fmt(d.chamber_pressure_psi, 0) + " psi";
   $("c_pcsub").textContent = fmt(d.chamber_pressure_mpa, 2) + " MPa";
   $("c_thrust").textContent = fmt(d.thrust_n, 0) + " N";
+  $("c_thrustsub").textContent = `at ${fmt(d.ambient_kpa, d.ambient_kpa % 1 ? 1 : 0)} kPa ambient`;
   $("c_class").textContent = d.motor_class;
   const w = $("castWarnings");
   if (d.warnings.length) {
@@ -728,6 +751,8 @@ $("savePrep").addEventListener("click", savePrep);
 for (const f of [...GRAIN_IDS, ...NOZZLE_IDS]) {
   $(`g_${f}`).addEventListener("input", debounce(runCastDesign, 250));
 }
+$("ambient_preset").addEventListener("change", onAmbientPreset);
+$("ambient_kpa").addEventListener("input", debounce(onAmbientKpa, 250));
 $("autocastBtn").addEventListener("click", runAutocast);
 $("applyCast").addEventListener("click", applyProposal);
 $("createProject").addEventListener("click", createProject);
