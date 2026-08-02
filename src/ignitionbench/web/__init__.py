@@ -320,10 +320,37 @@ def create_app() -> Flask:
     # ---- AI mentor ----
 
     from . import ai
+    from . import settings as app_settings
+
+    def _ai_status_payload() -> dict:
+        source = ai.credential_source()
+        return {
+            "configured": ai.configured(),
+            "model": ai.MODEL,
+            "source": source,
+            "key_hint": app_settings.masked_key(),
+            # An env-var key can't be changed from the UI (it would be overridden).
+            "editable": source in ("stored", "none"),
+        }
 
     @app.get("/api/ai/status")
     def ai_status():
-        return jsonify({"configured": ai.configured(), "model": ai.MODEL})
+        return jsonify(_ai_status_payload())
+
+    @app.post("/api/ai/key")
+    def ai_set_key():
+        key = (request.get_json(force=True).get("key") or "").strip()
+        try:
+            ai.validate_key(key)
+        except ai.AIError as exc:
+            return jsonify({"error": str(exc)}), 422
+        app_settings.set_api_key(key)
+        return jsonify(_ai_status_payload())
+
+    @app.delete("/api/ai/key")
+    def ai_clear_key():
+        app_settings.clear_api_key()
+        return jsonify(_ai_status_payload())
 
     @app.post("/api/ai/chat")
     def ai_chat():

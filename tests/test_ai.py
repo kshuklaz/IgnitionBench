@@ -56,6 +56,62 @@ def test_status_reports_configuration(client, monkeypatch):
     assert client.get("/api/ai/status").get_json()["configured"] is False
 
 
+def test_settings_store_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("IGNITIONBENCH_DATA_DIR", str(tmp_path))
+    from ignitionbench.web import settings
+
+    assert settings.get_api_key() == ""
+    assert settings.masked_key() == ""
+    settings.set_api_key("sk-ant-secret-AB12")
+    assert settings.get_api_key() == "sk-ant-secret-AB12"
+    assert settings.masked_key() == "…AB12"  # only the tail is ever exposed
+    settings.clear_api_key()
+    assert settings.get_api_key() == ""
+
+
+def test_add_key_through_app_configures_and_masks(client, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    monkeypatch.setattr("os.path.isdir", lambda p: False)
+    monkeypatch.setattr(ai, "validate_key", lambda key: None)  # skip the network check
+
+    assert client.get("/api/ai/status").get_json()["configured"] is False
+
+    res = client.post("/api/ai/key", json={"key": "sk-ant-user-key-9Z9Z"})
+    body = res.get_json()
+    assert res.status_code == 200
+    assert body["configured"] is True
+    assert body["source"] == "stored"
+    assert body["key_hint"] == "…9Z9Z"
+    assert "sk-ant-user-key-9Z9Z" not in res.get_data(as_text=True)  # never echoed back
+
+    # the stored key now unlocks the AI routes
+    assert client.get("/api/ai/status").get_json()["configured"] is True
+
+    client.delete("/api/ai/key")
+    assert client.get("/api/ai/status").get_json()["configured"] is False
+
+
+def test_add_key_rejects_bad_key(client, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    monkeypatch.setattr("os.path.isdir", lambda p: False)
+
+    def _reject(key):
+        raise ai.AIError("Anthropic rejected that key.")
+
+    monkeypatch.setattr(ai, "validate_key", _reject)
+    res = client.post("/api/ai/key", json={"key": "sk-ant-bad"})
+    assert res.status_code == 422
+    assert "rejected" in res.get_json()["error"].lower()
+    assert client.get("/api/ai/status").get_json()["configured"] is False
+
+
+def test_env_key_takes_precedence_and_is_not_editable(client):
+    # fixture sets ANTHROPIC_API_KEY; env should win and lock out UI editing
+    body = client.get("/api/ai/status").get_json()
+    assert body["source"] == "env"
+    assert body["editable"] is False
+
+
 def test_chat_unconfigured_is_503(client, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY")
     monkeypatch.setattr("os.path.isdir", lambda p: False)

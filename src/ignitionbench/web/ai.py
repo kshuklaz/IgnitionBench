@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 
-from . import store
+from . import settings, store
 
 MODEL = os.environ.get("IGNITIONBENCH_AI_MODEL", "claude-opus-4-8")
 
@@ -216,17 +216,64 @@ class AIError(RuntimeError):
     """An AI request failed for reasons the caller should surface to the UI."""
 
 
-def configured() -> bool:
-    """Whether the Anthropic SDK has any credential source to resolve."""
+def credential_source() -> str:
+    """Where Delta's credentials come from: 'env', 'stored', 'credentials', or 'none'.
+
+    An environment variable wins over an in-app key so a deliberate deployment
+    choice is never silently overridden by a saved key.
+    """
     if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
-        return True
-    return os.path.isdir(os.path.expanduser("~/.config/anthropic/credentials"))
+        return "env"
+    if settings.get_api_key():
+        return "stored"
+    if os.path.isdir(os.path.expanduser("~/.config/anthropic/credentials")):
+        return "credentials"
+    return "none"
+
+
+def configured() -> bool:
+    """Whether Delta has any credential source to resolve."""
+    return credential_source() != "none"
+
+
+def _resolve_key() -> str:
+    """The API key to hand the SDK: env var first, then the in-app saved key."""
+    return os.environ.get("ANTHROPIC_API_KEY", "").strip() or settings.get_api_key()
 
 
 def _client():
     import anthropic
 
-    return anthropic.Anthropic()
+    key = _resolve_key()
+    if key:
+        return anthropic.Anthropic(api_key=key)
+    return anthropic.Anthropic()  # falls back to auth token / credentials dir
+
+
+def validate_key(key: str) -> None:
+    """Raise AIError if the key is empty or Anthropic rejects it.
+
+    Uses a cheap models.list() call. If the API can't be reached (offline), the
+    key is accepted rather than blocked — a real request will surface issues.
+    """
+    import anthropic
+
+    key = (key or "").strip()
+    if not key:
+        raise AIError("Enter your Anthropic API key.")
+    try:
+        anthropic.Anthropic(api_key=key).models.list()
+    except anthropic.AuthenticationError:
+        raise AIError(
+            "Anthropic rejected that key (authentication failed). Check for a typo "
+            "or a copy that dropped characters."
+        ) from None
+    except anthropic.PermissionDeniedError:
+        raise AIError("That key was accepted but isn't allowed to use the API.") from None
+    except anthropic.APIConnectionError:
+        return  # can't reach Anthropic to check (offline); accept and move on
+    except anthropic.APIStatusError:
+        return  # rate limit / transient server error — don't block saving
 
 
 def _analyze(payload: dict) -> dict:

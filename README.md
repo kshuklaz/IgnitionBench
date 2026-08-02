@@ -64,20 +64,25 @@ Then open http://localhost:8000 — a dark design studio:
 ## AI setup (optional)
 
 Everything except Delta (the AI mentor) and the Review tab works offline with no
-account. The AI features call the Claude API and need a key:
+account. The AI features call the Claude API and need a key. Create one at
+[console.anthropic.com](https://console.anthropic.com) (Settings → API Keys) and
+add a few dollars of billing credit, then supply it either way:
 
-1. Create a key at [console.anthropic.com](https://console.anthropic.com)
-   (Settings → API Keys) and add a few dollars of billing credit.
-2. Export it in the environment where the server runs, then start the app:
+- **In the app (easiest):** open the ✦ Delta panel and paste your key. It's
+  checked with Anthropic, then saved to `~/.ignitionbench/settings.json`
+  (chmod 0600, on your machine only) so it persists across restarts. A Remove
+  button clears it.
+- **Environment variable:** export it before starting the server. An env var
+  takes precedence over an in-app key.
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 python -m ignitionbench.web
 ```
 
-Never commit the key. Without it the app runs normally and the AI surfaces
-show a setup notice. Default model is Claude Opus 4.8; override with
-`IGNITIONBENCH_AI_MODEL`.
+Never commit the key (the in-app store lives in your home dir, not the repo).
+Without a key the app runs normally and the AI surfaces show a setup notice.
+Default model is Claude Opus 4.8; override with `IGNITIONBENCH_AI_MODEL`.
 
 ## Quickstart
 

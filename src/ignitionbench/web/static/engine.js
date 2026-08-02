@@ -457,7 +457,7 @@ async function runAutocast() {
   if (!cfg.configured) {
     status.hidden = false;
     status.innerHTML =
-      'AutoCast needs a Claude API key. Set <code>ANTHROPIC_API_KEY</code> and restart the server.';
+      'AutoCast needs your Anthropic API key — open the ✦ Delta panel to add it.';
     return;
   }
   $("autocastBtn").disabled = true;

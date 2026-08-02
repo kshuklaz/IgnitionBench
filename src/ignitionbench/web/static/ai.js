@@ -64,37 +64,108 @@
     return div;
   }
 
-  const NOT_CONFIGURED =
-    "Delta needs a Claude API key. Set <code>ANTHROPIC_API_KEY</code> " +
-    "in the environment and restart the server (<code>python -m ignitionbench.web</code>).";
+  const NOT_CONFIGURED = "Delta needs your Anthropic API key — open the ✦ Delta panel to add it.";
 
   async function ensureStatus() {
     if (aiStatus) return aiStatus;
     try {
       aiStatus = await (await fetch("/api/ai/status")).json();
     } catch {
-      aiStatus = { configured: false };
+      aiStatus = { configured: false, source: "none", editable: true };
     }
     return aiStatus;
+  }
+
+  // ---------- API key panel (lives at the top of the drawer) ----------
+
+  const keyPanel = document.createElement("div");
+  keyPanel.className = "ai-keypanel";
+  keyPanel.hidden = true;
+  $("aiMessages").before(keyPanel);
+
+  function renderKeyPanel() {
+    const s = aiStatus || {};
+    if (s.source === "env" || s.source === "credentials") {
+      // A key is supplied outside the app; nothing to manage here.
+      keyPanel.hidden = true;
+      keyPanel.innerHTML = "";
+      return;
+    }
+    keyPanel.hidden = false;
+    if (s.source === "stored") {
+      keyPanel.innerHTML =
+        `<div class="ai-keynote">API key added ` +
+        `<span class="ai-keyhint">${escapeHtml(s.key_hint || "")}</span>` +
+        `<button type="button" class="link-btn" id="aiKeyRemove">Remove</button></div>`;
+      $("aiKeyRemove").addEventListener("click", removeKey);
+      return;
+    }
+    // No key yet: show the entry form.
+    keyPanel.innerHTML =
+      `<form class="ai-keyform" id="aiKeyForm">
+         <p>Delta needs your Anthropic API key. It's stored only on this computer
+         and never leaves it.</p>
+         <input id="aiKeyInput" type="password" placeholder="sk-ant-…"
+                autocomplete="off" spellcheck="false">
+         <div class="ai-keyrow">
+           <button class="btn primary" type="submit">Save key</button>
+           <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get a key ↗</a>
+         </div>
+         <div class="ai-keymsg" id="aiKeyMsg"></div>
+       </form>`;
+    $("aiKeyForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const k = $("aiKeyInput").value.trim();
+      if (k) saveKey(k);
+    });
+  }
+
+  async function saveKey(key) {
+    const msg = $("aiKeyMsg");
+    if (msg) msg.textContent = "Checking your key…";
+    try {
+      const res = await fetch("/api/ai/key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+      aiStatus = d;
+      renderKeyPanel();
+      if (aiStatus.configured) greet(true);
+    } catch (err) {
+      if ($("aiKeyMsg")) $("aiKeyMsg").textContent = `⚠ ${err.message}`;
+    }
+  }
+
+  async function removeKey() {
+    try {
+      aiStatus = await (await fetch("/api/ai/key", { method: "DELETE" })).json();
+    } catch {
+      aiStatus = { configured: false, source: "none", editable: true };
+    }
+    renderKeyPanel();
+  }
+
+  function greet(force = false) {
+    if ($("aiMessages").dataset.greeted && !force) return;
+    $("aiMessages").dataset.greeted = "1";
+    addMessage(
+      "assistant",
+      projectId
+        ? "I can see your current design. Ask me anything — or ask me to change it, and I'll explain what I did and why."
+        : "Ask me about rocketry, safety practice, or the design process. Open a project and I can review or edit the design itself.",
+      "notice",
+    );
   }
 
   async function openDrawer() {
     $("aiDrawer").hidden = false;
     $("aiTab").hidden = true;
     const status = await ensureStatus();
-    if (!status.configured && !$("aiMessages").dataset.warned) {
-      $("aiMessages").dataset.warned = "1";
-      addMessage("assistant", NOT_CONFIGURED, "notice");
-    } else if (!$("aiMessages").dataset.greeted && status.configured) {
-      $("aiMessages").dataset.greeted = "1";
-      addMessage(
-        "assistant",
-        projectId
-          ? "I can see your current design. Ask me anything — or ask me to change it, and I'll explain what I did and why."
-          : "Ask me about rocketry, safety practice, or the design process. Open a project and I can review or edit the design itself.",
-        "notice",
-      );
-    }
+    renderKeyPanel();
+    if (status.configured) greet();
     $("aiText").focus();
   }
 
@@ -108,7 +179,8 @@
     if (!text || busy) return;
     const status = await ensureStatus();
     if (!status.configured) {
-      addMessage("assistant", NOT_CONFIGURED, "notice");
+      renderKeyPanel();
+      if ($("aiKeyInput")) $("aiKeyInput").focus();
       return;
     }
     busy = true;
