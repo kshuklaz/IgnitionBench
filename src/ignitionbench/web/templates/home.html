@@ -42,6 +42,8 @@ document.documentElement.dataset.theme =
       its grain casting. Anything you save there shows up in every project's
       propellant menu.</p>
     </div>
+    <button class="btn small rail-resources" id="tutorialBtn"
+      data-tip="A step-by-step walkthrough that designs your first motor with you — reopen it anytime">🎓 Guided tutorial</button>
     <button class="btn small rail-resources" id="resourcesBtn"
       data-tip="Trusted websites, books, and open-source tools for learning rocketry">📚 Resources</button>
   </aside>
@@ -53,6 +55,7 @@ document.documentElement.dataset.theme =
       <h2>No projects yet</h2>
       <p>Start your first motor — pick a propellant, shape the grain, and watch it burn.</p>
       <button class="btn primary" id="emptyNewBtn">Start your first motor</button>
+      <button class="btn empty-tut" id="emptyTutorialBtn">🎓 New to this? Take the guided tutorial</button>
     </div>
     <div class="project-grid" id="projectGrid"></div>
   </div>
@@ -122,6 +125,7 @@ document.documentElement.dataset.theme =
 <script src="{{ url_for('static', filename='theme.js') }}"></script>
 <script src="{{ url_for('static', filename='tooltip.js') }}"></script>
 <script src="{{ url_for('static', filename='ai.js') }}"></script>
+<script src="{{ url_for('static', filename='tutorial.js') }}"></script>
 <script src="{{ url_for('static', filename='home.js') }}"></script>
 </body>
 </html>
