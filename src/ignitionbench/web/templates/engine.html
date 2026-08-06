@@ -25,6 +25,7 @@ document.documentElement.dataset.theme =
   </div>
   <div class="header-right">
     <button class="btn theme-toggle" id="themeToggle" data-tip="Switch between light and dark mode">☀</button>
+    <button class="btn" id="engineTutorialBtn" data-tip="Walk through the Propellant Engine step by step">🎓 Tutorial</button>
     <button class="btn primary" id="newPropTop" data-tip="Start a new propellant">+ New propellant</button>
   </div>
 </header>
@@ -328,6 +329,7 @@ document.documentElement.dataset.theme =
 <script src="{{ url_for('static', filename='theme.js') }}"></script>
 <script src="{{ url_for('static', filename='tooltip.js') }}"></script>
 <script src="{{ url_for('static', filename='ai.js') }}"></script>
+<script src="{{ url_for('static', filename='tutorial.js') }}"></script>
 <script src="{{ url_for('static', filename='engine.js') }}"></script>
 </body>
 </html>
