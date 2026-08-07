@@ -380,8 +380,13 @@
 
     const el = s.sel ? $(s.sel) : null;
     if (s.sel && !visible(el)) {
-      if (retries < 30) return void setTimeout(() => showStep(retries + 1), 100);
-      return advance(); // don't trap the user on a target that never appears
+      if (retries >= 50) return advance(); // ~5s: don't trap the user on a target that never appears
+      // Target isn't on screen yet — usually async content still loading (e.g.
+      // the workspace opening after Create). Immediately show THIS step's callout
+      // centered, with no spotlight, so the previous step never sits frozen on
+      // screen while we poll. The spotlight snaps on once the target appears.
+      if (retries === 0) { curTarget = null; renderCallout(s); placeCenter(); }
+      return void setTimeout(() => showStep(retries + 1), 100);
     }
     curTarget = el;
     renderCallout(s);
@@ -398,8 +403,12 @@
     if (s.click) {
       clickEl = $(s.click);
       if (clickEl) {
-        clickFn = () => setTimeout(advance, 140); // let the app's own handler run first
-        clickEl.addEventListener("click", clickFn);
+        // A commit step hands off to another page (the app navigates on this same
+        // click). The FLAG is already set above, so the next page resumes the tour —
+        // we must NOT advance here, or running off the end of this page's list would
+        // finish() and wipe the flag before the (slower) navigation lands.
+        clickFn = s.commit ? null : () => setTimeout(advance, 140); // let the app's handler run first
+        if (clickFn) clickEl.addEventListener("click", clickFn);
       }
     }
   }
