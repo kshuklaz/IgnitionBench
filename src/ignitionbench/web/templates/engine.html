@@ -96,16 +96,19 @@ document.documentElement.dataset.theme =
             <input id="p_name" type="text" maxlength="60" placeholder="e.g. My 65/35 KNSB batch">
           </label>
 
-          <label class="lbl">Burn-rate source</label>
+          <label class="lbl">Burn-rate data — pick a baseline, or enter your own</label>
           <div class="segmented" id="sourceMode">
-            <button class="seg active" data-src="base" data-tip="Use a published propellant's measured burn data">Start from published</button>
+            <button class="seg active" data-src="base" data-tip="Use a published propellant's measured burn data">Pick a published baseline</button>
             <button class="seg" data-src="own" data-tip="Enter your own a and n from strand-burner tests">My own a/n data</button>
           </div>
 
           <div id="baseForm">
-            <label class="lbl">Published baseline
+            <label class="lbl">Baseline propellant — required
               <select id="p_base" data-tip="Your propellant will burn like this characterized propellant"></select>
             </label>
+            <p class="footnote">Required to simulate. Your batch burns like this published
+            propellant until you measure your own. Pick the one yours is chemically
+            closest to (e.g. a 65/35 KNSB batch → KNSB).</p>
             <table class="spec" id="baseMeta"></table>
           </div>
 
@@ -303,8 +306,9 @@ document.documentElement.dataset.theme =
     <h2>New propellant</h2>
     <label for="newPropName">Propellant name</label>
     <input id="newPropName" type="text" placeholder="e.g. My 65/35 KNSB batch" maxlength="60" autocomplete="off">
-    <p class="footnote">It starts from a published KNSB baseline — you can switch it
-    to your own a/n data once it's open.</p>
+    <p class="footnote">Every propellant needs a burn-rate baseline to simulate. It
+    starts from published KNSB — once it's open you can pick a different baseline, or
+    switch to your own measured a/n data.</p>
     <div class="modal-actions">
       <button class="btn" id="newModalCancel">Cancel</button>
       <button class="btn primary" id="newModalCreate">Create</button>
