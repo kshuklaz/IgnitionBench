@@ -5,7 +5,17 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.local
+.env.*.local
 dist/
 build/
 .DS_Store
 *.stl
+.claude/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.mypy_cache/
+.ruff_cache/
