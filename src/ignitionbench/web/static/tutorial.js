@@ -6,7 +6,11 @@
 (() => {
   const FLAG = "ib-tour"; // "home" | "project" while the first-motor tour spans pages
   const SEEN = "ib-tour-seen";
-  const path = location.pathname;
+  const ROOT = window.APP_ROOT || "";
+  // Normalize away the mount prefix so route checks below stay app-relative.
+  const path = ROOT && location.pathname.startsWith(ROOT)
+    ? location.pathname.slice(ROOT.length) || "/"
+    : location.pathname;
   const onProject = /^\/project\//.test(path) || !!window.PROJECT_ID;
   const onEngine = path === "/engine";
   const onHome = path === "/" || path === "";
@@ -450,7 +454,7 @@
   } else if (onHome && flag === "home") {
     run(HOME_STEPS);
   } else if (onHome && !localStorage.getItem(SEEN)) {
-    fetch("/api/projects")
+    fetch(`${ROOT}/api/projects`)
       .then((r) => r.json())
       .then((p) => { if (Array.isArray(p) && p.length === 0) startHome(); })
       .catch(() => {});

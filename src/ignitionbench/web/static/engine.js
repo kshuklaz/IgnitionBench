@@ -5,6 +5,7 @@
 // propellants saved here show up in every project's propellant menu.
 
 const $ = (id) => document.getElementById(id);
+const ROOT = window.APP_ROOT || "";
 const fmt = (x, d = 1) =>
   Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const debounce = (fn, ms) => {
@@ -108,7 +109,7 @@ function renderGallery() {
       e.stopPropagation();
       const name = prompt("Rename propellant:", p.name);
       if (name && name.trim()) {
-        await fetch(`/api/propellants/${p.id}`, {
+        await fetch(`${ROOT}/api/propellants/${p.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: name.trim() }),
@@ -121,7 +122,7 @@ function renderGallery() {
     del.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (del.dataset.armed) {
-        await fetch(`/api/propellants/${p.id}`, { method: "DELETE" });
+        await fetch(`${ROOT}/api/propellants/${p.id}`, { method: "DELETE" });
         await loadCatalog();
         return;
       }
@@ -145,7 +146,7 @@ function openNewModal() {
 async function createNewProp() {
   const name = $("newPropName").value.trim();
   if (!name) return;
-  const res = await fetch("/api/propellants", {
+  const res = await fetch(`${ROOT}/api/propellants`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, base_key: "knsb" }),
@@ -165,7 +166,7 @@ function showGallery({ push = false } = {}) {
   currentKey = null;
   $("engineWorkspace").hidden = true;
   $("engineGallery").hidden = false;
-  if (push) history.pushState({}, "", "/engine");
+  if (push) history.pushState({}, "", `${ROOT}/engine`);
   renderGallery();
 }
 
@@ -175,7 +176,7 @@ function openWorkspace(key, { push = false } = {}) {
   currentKey = key;
   $("engineGallery").hidden = true;
   $("engineWorkspace").hidden = false;
-  if (push) history.pushState({ p: p.id }, "", `/engine?p=${p.id}`);
+  if (push) history.pushState({ p: p.id }, "", `${ROOT}/engine?p=${p.id}`);
 
   $("wsName").textContent = p.name;
   $("wsSub").textContent = p.base_key
@@ -317,7 +318,7 @@ async function saveProp() {
   $("saveProp").disabled = true;
   msg.textContent = "Saving…";
   try {
-    const res = await fetch(`/api/propellants/${catalog[currentKey].id}`, {
+    const res = await fetch(`${ROOT}/api/propellants/${catalog[currentKey].id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -361,7 +362,7 @@ async function savePrep() {
   if (!currentKey) return;
   const p = catalog[currentKey];
   $("prepMsg").textContent = "Saving…";
-  await fetch(`/api/propellants/${p.id}`, {
+  await fetch(`${ROOT}/api/propellants/${p.id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prepare_notes: $("prepNotes").value }),
@@ -420,7 +421,7 @@ async function runCastDesign() {
   if (!currentKey) return;
   let d;
   try {
-    const res = await fetch("/api/design", {
+    const res = await fetch(`${ROOT}/api/design`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(castDesignPayload()),
@@ -453,7 +454,7 @@ let castProposal = null;
 async function runAutocast() {
   const status = $("autocastStatus");
   const body = $("autocastBody");
-  const cfg = await (await fetch("/api/ai/status")).json().catch(() => ({ configured: false }));
+  const cfg = await (await fetch(`${ROOT}/api/ai/status`)).json().catch(() => ({ configured: false }));
   if (!cfg.configured) {
     status.hidden = false;
     status.innerHTML =
@@ -467,7 +468,7 @@ async function runAutocast() {
   $("applyCast").hidden = true;
   castProposal = null;
   try {
-    const res = await fetch("/api/ai/autocast", {
+    const res = await fetch(`${ROOT}/api/ai/autocast`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -504,7 +505,7 @@ async function createProject() {
   if (!currentKey) return;
   const name = prompt("Name this motor project:", `${catalog[currentKey]?.name || "Motor"} build`);
   if (!name || !name.trim()) return;
-  const proj = await (await fetch("/api/projects", {
+  const proj = await (await fetch(`${ROOT}/api/projects`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: name.trim() }),
@@ -513,12 +514,12 @@ async function createProject() {
   proj.propellant.key = currentKey;
   proj.grain = { ...proj.grain, ...castGrain() };
   proj.nozzle = castNozzle();
-  await fetch(`/api/projects/${proj.id}`, {
+  await fetch(`${ROOT}/api/projects/${proj.id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: proj.name, propellant: proj.propellant, grain: proj.grain, nozzle: proj.nozzle, summary: {} }),
   });
-  location.href = `/project/${proj.id}`;
+  location.href = `${ROOT}/project/${proj.id}`;
 }
 
 // ---------- Characterization: fit a/n from measured test burns ----------
@@ -700,7 +701,7 @@ function fillSelect(sel, entries, { onlyBase = false, prefer = "knsb" } = {}) {
 }
 
 async function loadCatalog() {
-  catalog = await (await fetch("/api/propellants")).json();
+  catalog = await (await fetch(`${ROOT}/api/propellants`)).json();
   fillSelect($("p_base"), Object.entries(catalog), { onlyBase: true });
   renderGallery();
 }

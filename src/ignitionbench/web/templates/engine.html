@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IgnitionBench — Propellant Engine</title>
+<script>window.APP_ROOT = {{ request.script_root | tojson }};</script>
 <script>
 document.documentElement.dataset.theme =
   localStorage.getItem("ib-theme") ||
@@ -15,7 +16,7 @@ document.documentElement.dataset.theme =
 <body>
 <header>
   <div class="brand">
-    <a class="back" href="/" title="All projects" data-tip="Back to your projects">‹</a>
+    <a class="back" href="{{ url_for('home') }}" title="All projects" data-tip="Back to your projects">‹</a>
     <img class="logo" data-logo="{{ url_for('static', filename='logo-mark.png') }}"
          src="{{ url_for('static', filename='logo-mark.png') }}" alt="">
     <div>

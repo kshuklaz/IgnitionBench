@@ -1,4 +1,5 @@
 const $ = (id) => document.getElementById(id);
+const ROOT = window.APP_ROOT || "";
 
 function relTime(ts) {
   const s = Date.now() / 1000 - ts;
@@ -9,7 +10,7 @@ function relTime(ts) {
 }
 
 async function loadProjects() {
-  const projects = await (await fetch("/api/projects")).json();
+  const projects = await (await fetch(`${ROOT}/api/projects`)).json();
   const grid = $("projectGrid");
   grid.innerHTML = "";
   $("emptyState").hidden = projects.length > 0;
@@ -35,12 +36,12 @@ async function loadProjects() {
         <button class="icon-btn delete" title="Delete">✕ delete</button>
       </div>`;
     card.querySelector("h3").textContent = p.name;
-    card.addEventListener("click", () => (location.href = `/project/${p.id}`));
+    card.addEventListener("click", () => (location.href = `${ROOT}/project/${p.id}`));
     card.querySelector(".rename").addEventListener("click", async (e) => {
       e.stopPropagation();
       const name = prompt("Rename project:", p.name);
       if (name && name.trim()) {
-        await fetch(`/api/projects/${p.id}`, {
+        await fetch(`${ROOT}/api/projects/${p.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: name.trim() }),
@@ -53,7 +54,7 @@ async function loadProjects() {
     deleteBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (deleteBtn.dataset.armed) {
-        await fetch(`/api/projects/${p.id}`, { method: "DELETE" });
+        await fetch(`${ROOT}/api/projects/${p.id}`, { method: "DELETE" });
         loadProjects();
         return;
       }
@@ -79,13 +80,13 @@ function openModal() {
 async function createProject() {
   const name = $("projectName").value.trim();
   if (!name) return;
-  const res = await fetch("/api/projects", {
+  const res = await fetch(`${ROOT}/api/projects`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
   const project = await res.json();
-  location.href = `/project/${project.id}`;
+  location.href = `${ROOT}/project/${project.id}`;
 }
 
 $("newProjectBtn").addEventListener("click", openModal);

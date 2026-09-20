@@ -4,6 +4,7 @@
 
 (() => {
   const $ = (id) => document.getElementById(id);
+  const ROOT = window.APP_ROOT || "";
   const projectId = window.PROJECT_ID || null;
   const history = []; // [{role, content}] for this page visit
   let aiStatus = null;
@@ -69,7 +70,7 @@
   async function ensureStatus() {
     if (aiStatus) return aiStatus;
     try {
-      aiStatus = await (await fetch("/api/ai/status")).json();
+      aiStatus = await (await fetch(`${ROOT}/api/ai/status`)).json();
     } catch {
       aiStatus = { configured: false, source: "none", editable: true };
     }
@@ -124,7 +125,7 @@
     const msg = $("aiKeyMsg");
     if (msg) msg.textContent = "Checking your key…";
     try {
-      const res = await fetch("/api/ai/key", {
+      const res = await fetch(`${ROOT}/api/ai/key`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key }),
@@ -141,7 +142,7 @@
 
   async function removeKey() {
     try {
-      aiStatus = await (await fetch("/api/ai/key", { method: "DELETE" })).json();
+      aiStatus = await (await fetch(`${ROOT}/api/ai/key`, { method: "DELETE" })).json();
     } catch {
       aiStatus = { configured: false, source: "none", editable: true };
     }
@@ -190,7 +191,7 @@
     addMessage("user", escapeHtml(text));
     const pending = addMessage("assistant", "Thinking…", "pending");
     try {
-      const res = await fetch("/api/ai/chat", {
+      const res = await fetch(`${ROOT}/api/ai/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ project_id: projectId, messages: history }),
@@ -245,7 +246,7 @@
     note.hidden = false;
     note.textContent = "Delta is reviewing your project — this takes a moment…";
     try {
-      const res = await fetch("/api/ai/review", {
+      const res = await fetch(`${ROOT}/api/ai/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ project_id: projectId }),

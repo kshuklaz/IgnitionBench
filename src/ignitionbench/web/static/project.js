@@ -2,6 +2,7 @@ import { lineChart } from "./charts.js";
 import { MotorViewer } from "./viewer3d.js";
 
 const $ = (id) => document.getElementById(id);
+const ROOT = window.APP_ROOT || "";
 const fmt = (x, d = 1) =>
   Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const debounce = (fn, ms) => {
@@ -54,7 +55,7 @@ function formsToState() {
 const save = debounce(async () => {
   $("saveState").textContent = "Saving…";
   $("saveState").classList.add("saving");
-  await fetch(`/api/projects/${window.PROJECT_ID}`, {
+  await fetch(`${ROOT}/api/projects/${window.PROJECT_ID}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -134,7 +135,7 @@ async function refreshDesign() {
   renderPropellantTab();
   simStale = true;
 
-  const res = await fetch("/api/design", {
+  const res = await fetch(`${ROOT}/api/design`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(designPayload()),
@@ -293,7 +294,7 @@ function drawNozzleSection(geo) {
 // ---------- simulation tab ----------
 
 async function runSimulation() {
-  const res = await fetch("/api/simulate", {
+  const res = await fetch(`${ROOT}/api/simulate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(designPayload()),
@@ -642,15 +643,15 @@ $("stlBtn").addEventListener("click", () => {
     // the cut differs per segment, so slitted grains export the whole stack
     segments: g.slit_count > 0 ? g.segments : 1,
   });
-  location.href = `/api/stl?${params}`;
+  location.href = `${ROOT}/api/stl?${params}`;
 });
 
 // ---------- boot ----------
 
 async function boot() {
   const [projRes, libRes] = await Promise.all([
-    fetch(`/api/projects/${window.PROJECT_ID}`),
-    fetch("/api/propellants"),
+    fetch(`${ROOT}/api/projects/${window.PROJECT_ID}`),
+    fetch(`${ROOT}/api/propellants`),
   ]);
   project = await projRes.json();
   library = await libRes.json();

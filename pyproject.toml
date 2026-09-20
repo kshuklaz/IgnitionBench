@@ -22,6 +22,10 @@ dev = [
 web = [
     "flask",
 ]
+deploy = [
+    "flask",
+    "gunicorn",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

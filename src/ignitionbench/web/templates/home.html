@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IgnitionBench — Projects</title>
+<script>window.APP_ROOT = {{ request.script_root | tojson }};</script>
 <script>
 document.documentElement.dataset.theme =
   localStorage.getItem("ib-theme") ||
@@ -30,10 +31,10 @@ document.documentElement.dataset.theme =
 <main class="home">
   <aside class="side-rail">
     <nav class="rail-nav">
-      <a class="rail-item active" href="/" data-tip="Your saved motor projects">
+      <a class="rail-item active" href="{{ url_for('home') }}" data-tip="Your saved motor projects">
         <span class="rail-icon">◆</span> Projects
       </a>
-      <a class="rail-item" href="/engine" data-tip="Design and save your own propellant — plan ingredients, prepare safely, characterize the burn, and cast the grain">
+      <a class="rail-item" href="{{ url_for('engine_page') }}" data-tip="Design and save your own propellant — plan ingredients, prepare safely, characterize the burn, and cast the grain">
         <span class="rail-icon">✦</span> Propellant Engine
       </a>
     </nav>

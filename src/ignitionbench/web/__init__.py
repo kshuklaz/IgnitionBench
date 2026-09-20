@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import os
 
-from flask import Flask, Response, jsonify, redirect, render_template, request
+from flask import Flask, Response, jsonify, redirect, render_template, request, url_for
 
 from ignitionbench.export import grain_segment_stl
 from ignitionbench.nozzle import (
@@ -36,6 +37,31 @@ from . import propellant_store, store
 
 class DesignError(ValueError):
     pass
+
+
+class PrefixMiddleware:
+    """Lets the app run mounted under a sub-path, e.g. reverse-proxied at
+    www.example.com/igbench instead of the domain root.
+
+    Configure with the IGNITIONBENCH_URL_PREFIX env var (e.g. "/igbench"), or
+    have the proxy send an X-Forwarded-Prefix header — either way Flask's
+    ``url_for``/``request.script_root`` then generate correctly-prefixed URLs.
+    Handles both common proxy setups: one that strips the prefix before
+    forwarding (PATH_INFO already bare) and one that forwards it as-is.
+    """
+
+    def __init__(self, app, prefix: str = "") -> None:
+        self.app = app
+        self.prefix = prefix.rstrip("/")
+
+    def __call__(self, environ, start_response):
+        prefix = environ.get("HTTP_X_FORWARDED_PREFIX", self.prefix)
+        if prefix:
+            environ["SCRIPT_NAME"] = prefix
+            path = environ.get("PATH_INFO", "")
+            if path.startswith(prefix):
+                environ["PATH_INFO"] = path[len(prefix) :] or "/"
+        return self.app(environ, start_response)
 
 
 def _build_propellant(spec: dict) -> Propellant:
@@ -203,6 +229,9 @@ def _design_result(
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["TEMPLATES_AUTO_RELOAD"] = True  # local tool; pick up edits without restart
+    app.wsgi_app = PrefixMiddleware(  # type: ignore[method-assign]
+        app.wsgi_app, prefix=os.environ.get("IGNITIONBENCH_URL_PREFIX", "")
+    )
 
     # ---- pages ----
 
@@ -215,7 +244,7 @@ def create_app() -> Flask:
         try:
             store.load_project(project_id)
         except KeyError:
-            return redirect("/")
+            return redirect(url_for("home"))
         return render_template("project.html", project_id=project_id)
 
     @app.get("/engine")
