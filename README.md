@@ -3,6 +3,10 @@
   <img src="assets/logo-black.png" alt="IgnitionBench" width="420">
 </picture>
 
+> I have always had an interest in rocketry and space. I consistently watch rocketry videos and have learned a lot from them and this is a compilation of months of knowledge and work into a single software. I wanted to make a cool project i could use for college and I also made this for the Stardance challenge.
+
+---
+
 AI-powered rocket motor design software for hobbyist rocketeers.
 
 IgnitionBench combines accurate solid-propellant rocket science with plain-language
